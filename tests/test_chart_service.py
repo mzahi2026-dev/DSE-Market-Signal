@@ -23,6 +23,9 @@ def test_full_chart_data_structure():
     assert "indicators" in data
     assert "rsi" in data["indicators"]
     assert "macd" in data["indicators"]
+    assert "levels" in data
+    assert "support_1" in data["levels"]
+    assert "resistance_1" in data["levels"]
 
 
 def test_api_chart_endpoints():

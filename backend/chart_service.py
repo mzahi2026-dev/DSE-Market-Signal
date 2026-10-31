@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List
 import pandas as pd
-from backend.analysis import get_stock_price_history
+from backend.analysis import get_stock_price_history, calculate_support_resistance
 from backend.indicators import calculate_all_indicators
 
 
@@ -73,11 +73,14 @@ def get_full_chart_data(symbol: str, limit: int = 100) -> Dict[str, Any]:
                 "histogram_color": "#089981" if hist >= 0 else "#f23645"
             })
 
+    sr_levels = calculate_support_resistance(df_ind)
+
     return {
         "symbol": symbol,
         "count": len(candlesticks),
         "candlesticks": candlesticks,
         "volume": volume_series,
+        "levels": sr_levels,
         "overlays": {
             "ema_9": ema_9_series,
             "ema_21": ema_21_series,

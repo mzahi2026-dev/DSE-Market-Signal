@@ -2,6 +2,7 @@
 
 let currentSymbol = "GP";
 let chartData = [];
+let currentLevels = null;
 
 // Initialize dashboard on load
 document.addEventListener("DOMContentLoaded", () => {
@@ -128,10 +129,12 @@ async function loadStockData(symbol) {
       fetch(`/indicators/${symbol}?limit=60`)
     ]);
 
+    let levels = null;
     if (anaRes.ok) {
       const ana = await anaRes.json();
       updateStockHeader(ana);
       updateTechnicalLevels(ana);
+      levels = ana.levels;
     }
 
     if (sigRes.ok) {
@@ -142,7 +145,11 @@ async function loadStockData(symbol) {
     if (indRes.ok) {
       const ind = await indRes.json();
       chartData = ind.data || [];
-      renderChart(chartData);
+      if (!levels && ind.levels) {
+        levels = ind.levels;
+      }
+      currentLevels = levels;
+      renderChart(chartData, currentLevels);
     }
   } catch (err) {
     console.error("Error loading stock:", err);
@@ -212,7 +219,7 @@ function updateSignalCard(sig) {
 }
 
 // Interactive HTML5 Canvas Candlestick & Technical Chart
-function renderChart(data) {
+function renderChart(data, levels = currentLevels) {
   const canvas = document.getElementById("priceChart");
   if (!canvas || !data || data.length === 0) return;
 
@@ -232,13 +239,17 @@ function renderChart(data) {
 
   ctx.clearRect(0, 0, w, h);
 
-  // Calculate Price Scaling
+  // Calculate Price Scaling including indicators & support/resistance levels
   const prices = [];
   data.forEach(d => {
     prices.push(d.high, d.low);
     if (d.bb_upper) prices.push(d.bb_upper);
     if (d.bb_lower) prices.push(d.bb_lower);
   });
+  if (levels && levels.resistance_1) prices.push(levels.resistance_1);
+  if (levels && levels.support_1) prices.push(levels.support_1);
+  if (levels && levels.pivot) prices.push(levels.pivot);
+
   const minP = Math.min(...prices) * 0.99;
   const maxP = Math.max(...prices) * 1.01;
   const pRange = maxP - minP || 1;
@@ -291,6 +302,73 @@ function renderChart(data) {
   drawIndicatorLine(ctx, data, "ema_9", getY, step, "#2962ff");
   drawIndicatorLine(ctx, data, "ema_21", getY, step, "#ff9800");
   drawIndicatorLine(ctx, data, "ema_50", getY, step, "#ab47bc");
+
+  // Draw Support, Resistance & Pivot Reference Lines
+  if (levels) {
+    // Resistance 1 (R1) - Red dashed line with badge
+    if (levels.resistance_1) {
+      const rY = getY(levels.resistance_1);
+      if (rY >= 5 && rY <= priceH - 5) {
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "#ef5350";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, rY);
+        ctx.lineTo(w - 60, rY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#ef5350";
+        ctx.fillRect(w - 60, rY - 7, 56, 14);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 9px sans-serif";
+        ctx.fillText(`R1 ${levels.resistance_1.toFixed(1)}`, w - 57, rY + 4);
+        ctx.restore();
+      }
+    }
+
+    // Support 1 (S1) - Green dashed line with badge
+    if (levels.support_1) {
+      const sY = getY(levels.support_1);
+      if (sY >= 5 && sY <= priceH - 5) {
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "#089981";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, sY);
+        ctx.lineTo(w - 60, sY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#089981";
+        ctx.fillRect(w - 60, sY - 7, 56, 14);
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 9px sans-serif";
+        ctx.fillText(`S1 ${levels.support_1.toFixed(1)}`, w - 57, sY + 4);
+        ctx.restore();
+      }
+    }
+
+    // Classic Pivot - Gold dashed line with label
+    if (levels.pivot) {
+      const pY = getY(levels.pivot);
+      if (pY >= 5 && pY <= priceH - 5) {
+        ctx.save();
+        ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = "#f0b90b99";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, pY);
+        ctx.lineTo(w - 60, pY);
+        ctx.stroke();
+
+        ctx.fillStyle = "#f0b90b";
+        ctx.font = "9px sans-serif";
+        ctx.fillText(`P ${levels.pivot.toFixed(1)}`, w - 50, pY + 3);
+        ctx.restore();
+      }
+    }
+  }
 
   // RSI Subpanel
   ctx.strokeStyle = "#363c4e";
@@ -348,7 +426,7 @@ function drawIndicatorLine(ctx, data, field, getY, step, color) {
 }
 
 function resizeChart() {
-  setTimeout(() => renderChart(chartData), 100);
+  setTimeout(() => renderChart(chartData, currentLevels), 100);
 }
 window.addEventListener("resize", resizeChart);
 

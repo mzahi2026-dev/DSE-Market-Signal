@@ -11,7 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from backend.db import connect
 from backend.collector import collect, collect_daily, collect_intraday, get_configured_symbols
 from backend.indicators import calculate_all_indicators
-from backend.analysis import analyze_stock, get_stock_price_history
+from backend.analysis import analyze_stock, get_stock_price_history, calculate_support_resistance
 from backend.market_summary import get_market_summary, get_all_symbols
 from backend.signals import generate_signal
 from backend.telegram import send_telegram_alert
@@ -231,10 +231,12 @@ def stock_indicators(symbol: str, limit: int = 60):
         raise HTTPException(404, f"No price data available for {symbol}")
     df_ind = calculate_all_indicators(df)
     records = df_ind.fillna(0).to_dict(orient="records")
+    sr_levels = calculate_support_resistance(df)
     return {
         "symbol": symbol.upper(),
         "count": len(records),
-        "data": records
+        "data": records,
+        "levels": sr_levels
     }
 
 

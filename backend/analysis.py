@@ -1,6 +1,7 @@
 """Stock technical analysis and trend evaluation module."""
 
 from typing import Any, Dict, List, Optional
+import numpy as np
 import pandas as pd
 from backend.db import connect
 from backend.indicators import calculate_all_indicators
@@ -28,30 +29,109 @@ def get_stock_price_history(symbol: str, limit: int = 250) -> pd.DataFrame:
 
 
 def calculate_support_resistance(df: pd.DataFrame, window: int = 20) -> Dict[str, float]:
-    """Calculate key support, resistance, and pivot levels from price history."""
+    """Calculate key support, resistance, and pivot levels from price history with DSE volatility protection."""
     if df.empty:
-        return {"support_1": 0.0, "support_2": 0.0, "resistance_1": 0.0, "resistance_2": 0.0, "pivot": 0.0}
+        return {
+            "pivot": 0.0,
+            "support_1": 0.0,
+            "support_2": 0.0,
+            "resistance_1": 0.0,
+            "resistance_2": 0.0,
+            "swing_high": 0.0,
+            "swing_low": 0.0,
+            "atr": 0.0
+        }
 
+    # Ensure chronological order
+    df = df.sort_values("date").reset_index(drop=True)
     latest = df.iloc[-1]
-    high = float(df["high"].tail(window).max())
-    low = float(df["low"].tail(window).min())
     close = float(latest["close"])
 
-    # Standard Classic Pivot Points
-    pivot = (latest["high"] + latest["low"] + latest["close"]) / 3.0
-    r1 = (2 * pivot) - latest["low"]
-    s1 = (2 * pivot) - latest["high"]
-    r2 = pivot + (latest["high"] - latest["low"])
-    s2 = pivot - (latest["high"] - latest["low"])
+    # Calculate ATR(14)
+    tr = np.maximum(
+        df["high"] - df["low"],
+        np.maximum(
+            (df["high"] - df["close"].shift(1)).abs(),
+            (df["low"] - df["close"].shift(1)).abs()
+        )
+    )
+    atr_series = tr.tail(14).dropna()
+    atr_val = float(atr_series.mean()) if not atr_series.empty and atr_series.mean() > 0 else float(latest["high"] - latest["low"])
+    if atr_val <= 0 or np.isnan(atr_val):
+        atr_val = max(0.5, close * 0.01)
+
+    # Reference candle for Classic Pivots:
+    # Use previous completed bar if available, else latest
+    ref = df.iloc[-2] if len(df) > 1 else latest
+    ref_h = float(ref["high"])
+    ref_l = float(ref["low"])
+    ref_c = float(ref["close"])
+
+    # If reference bar is flat (H == L) as often occurs in DSE floor/circuit limits, look back for a bar with spread
+    if ref_h == ref_l:
+        non_flat = df[df["high"] > df["low"]]
+        if not non_flat.empty:
+            ref = non_flat.iloc[-1]
+            ref_h = float(ref["high"])
+            ref_l = float(ref["low"])
+            ref_c = float(ref["close"])
+        else:
+            ref_h = close + atr_val
+            ref_l = max(0.1, close - atr_val)
+            ref_c = close
+
+    # Standard Classic Pivot Points formula
+    pivot = (ref_h + ref_l + ref_c) / 3.0
+    r1 = (2.0 * pivot) - ref_l
+    s1 = (2.0 * pivot) - ref_h
+    r2 = pivot + (ref_h - ref_l)
+    s2 = pivot - (ref_h - ref_l)
+
+    # Find swing highs and lows in the lookback window
+    window_df = df.tail(window).reset_index(drop=True)
+    swing_high = float(window_df["high"].max())
+    swing_low = float(window_df["low"].min())
+
+    # Detect local swing points (fractals k=2)
+    k = 2
+    sw_highs, sw_lows = [], []
+    hi_vals = window_df["high"].values
+    lo_vals = window_df["low"].values
+    for i in range(k, len(window_df) - k):
+        if hi_vals[i] == hi_vals[i - k:i + k + 1].max():
+            sw_highs.append(float(hi_vals[i]))
+        if lo_vals[i] == lo_vals[i - k:i + k + 1].min():
+            sw_lows.append(float(lo_vals[i]))
+
+    min_buffer = atr_val * 0.1
+    above_swings = [h for h in sw_highs if h > (close + min_buffer)]
+    below_swings = [l for l in sw_lows if l < (close - min_buffer)]
+
+    # Guarantee resistance is strictly above current price
+    if r1 <= close + min_buffer:
+        r1 = min(above_swings) if above_swings else (close + 1.0 * atr_val)
+    if r2 <= r1:
+        r2 = r1 + atr_val
+
+    # Guarantee support is strictly below current price
+    if s1 >= close - min_buffer:
+        s1 = max(below_swings) if below_swings else max(0.1, close - 1.0 * atr_val)
+    if s2 >= s1:
+        s2 = max(0.1, s1 - atr_val)
+
+    # Ensure pivot stays realistically between s1 and r1
+    if pivot <= s1 or pivot >= r1:
+        pivot = (r1 + s1) / 2.0
 
     return {
-        "pivot": round(pivot, 2),
-        "support_1": round(s1, 2),
-        "support_2": round(s2, 2),
-        "resistance_1": round(r1, 2),
-        "resistance_2": round(r2, 2),
-        "swing_high": round(high, 2),
-        "swing_low": round(low, 2)
+        "pivot": round(float(pivot), 2),
+        "support_1": round(float(s1), 2),
+        "support_2": round(float(s2), 2),
+        "resistance_1": round(float(r1), 2),
+        "resistance_2": round(float(r2), 2),
+        "swing_high": round(float(swing_high), 2),
+        "swing_low": round(float(swing_low), 2),
+        "atr": round(float(atr_val), 2)
     }
 
 
