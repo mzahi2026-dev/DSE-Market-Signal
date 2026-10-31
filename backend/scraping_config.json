@@ -1,0 +1,15 @@
+{
+  "provider": "DSE",
+  "collection_method": "web_scraping",
+  "source": "legacy",
+  "api_key_required": false,
+  "symbols": ["GP"],
+  "historical_months": 6,
+  "batch_days": 7,
+  "auto_collection": true,
+  "schedule_timezone": "Asia/Dhaka",
+  "schedule_time": "16:30",
+  "duplicate_prevention": true,
+  "retry_failed": true,
+  "missing_data_recovery": true
+}

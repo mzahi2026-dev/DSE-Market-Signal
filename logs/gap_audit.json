@@ -1,0 +1,26 @@
+{
+  "symbol": "GP",
+  "start": "2026-04-30",
+  "end": "2026-10-30",
+  "stored_records": 122,
+  "expected_batches": 27,
+  "unverified_batches": [],
+  "missing_trading_days": [],
+  "verified_holidays": [
+    "2026-05-04",
+    "2026-05-25",
+    "2026-05-26",
+    "2026-05-27",
+    "2026-05-28",
+    "2026-05-31",
+    "2026-07-01",
+    "2026-07-16",
+    "2026-08-05",
+    "2026-08-26",
+    "2026-10-20",
+    "2026-10-21",
+    "2026-10-22"
+  ],
+  "calendar_verified": true,
+  "weekday_gap_candidates": []
+}

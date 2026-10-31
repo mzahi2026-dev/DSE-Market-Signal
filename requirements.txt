@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pandas
+bdshare==1.2.8
+apscheduler>=3.10,<4
+httpx
+pytest
