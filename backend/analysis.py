@@ -23,6 +23,12 @@ def get_stock_price_history(symbol: str, limit: int = 250) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.DataFrame(rows, columns=["date", "open", "high", "low", "close", "volume"])
+    # Defensive data hygiene: sanitize zero or corrupted open/high/low values
+    df["open"] = np.where(df["open"] <= 0, df["close"], df["open"])
+    df["high"] = np.where(df["high"] <= 0, np.maximum(df["open"], df["close"]), df["high"])
+    df["low"] = np.where(df["low"] <= 0, np.minimum(df["open"], df["close"]), df["low"])
+    df["high"] = np.maximum(df["high"], np.maximum(df["open"], df["close"]))
+    df["low"] = np.minimum(df["low"], np.minimum(df["open"], df["close"]))
     if limit and len(df) > limit:
         df = df.iloc[-limit:].reset_index(drop=True)
     return df

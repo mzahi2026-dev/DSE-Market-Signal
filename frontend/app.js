@@ -242,16 +242,20 @@ function renderChart(data, levels = currentLevels) {
   // Calculate Price Scaling including indicators & support/resistance levels
   const prices = [];
   data.forEach(d => {
-    prices.push(d.high, d.low);
-    if (d.bb_upper) prices.push(d.bb_upper);
-    if (d.bb_lower) prices.push(d.bb_lower);
+    const c = d.close;
+    const h = d.high > 0 ? d.high : c;
+    const l = d.low > 0 ? d.low : c;
+    prices.push(h, l);
+    if (d.bb_upper && d.bb_upper > 0) prices.push(d.bb_upper);
+    if (d.bb_lower && d.bb_lower > 0) prices.push(d.bb_lower);
   });
-  if (levels && levels.resistance_1) prices.push(levels.resistance_1);
-  if (levels && levels.support_1) prices.push(levels.support_1);
-  if (levels && levels.pivot) prices.push(levels.pivot);
+  if (levels && levels.resistance_1 && levels.resistance_1 > 0) prices.push(levels.resistance_1);
+  if (levels && levels.support_1 && levels.support_1 > 0) prices.push(levels.support_1);
+  if (levels && levels.pivot && levels.pivot > 0) prices.push(levels.pivot);
 
-  const minP = Math.min(...prices) * 0.99;
-  const maxP = Math.max(...prices) * 1.01;
+  const validPrices = prices.filter(p => p > 0);
+  const minP = validPrices.length ? Math.min(...validPrices) * 0.99 : 100;
+  const maxP = validPrices.length ? Math.max(...validPrices) * 1.01 : 300;
   const pRange = maxP - minP || 1;
 
   const getY = (val) => priceH - ((val - minP) / pRange * (priceH - 20)) - 10;
@@ -280,21 +284,25 @@ function renderChart(data, levels = currentLevels) {
   // Draw Candlesticks
   data.forEach((d, i) => {
     const x = 20 + i * step;
-    const isBull = d.close >= d.open;
+    const close = d.close;
+    const open = d.open > 0 ? d.open : close;
+    const high = Math.max(d.high > 0 ? d.high : close, Math.max(open, close));
+    const low = Math.min(d.low > 0 ? d.low : close, Math.min(open, close));
+    const isBull = close >= open;
     const color = isBull ? "#089981" : "#f23645";
 
     // Wick
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(x, getY(d.high));
-    ctx.lineTo(x, getY(d.low));
+    ctx.moveTo(x, getY(high));
+    ctx.lineTo(x, getY(low));
     ctx.stroke();
 
     // Body
     ctx.fillStyle = color;
-    const bodyTop = getY(Math.max(d.open, d.close));
-    const bodyH = Math.max(2, Math.abs(getY(d.close) - getY(d.open)));
+    const bodyTop = getY(Math.max(open, close));
+    const bodyH = Math.max(2, Math.abs(getY(close) - getY(open)));
     ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyH);
   });
 
