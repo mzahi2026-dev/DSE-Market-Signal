@@ -1,7 +1,7 @@
 {
   "engine_version": "2.0.0",
   "last_startup_catchup": {
-    "timestamp": "2026-11-01T04:05:48.342307+06:00",
+    "timestamp": "2026-11-01T04:13:28.304881+06:00",
     "symbols_checked": [
       "GP",
       "BATBC",
@@ -12,31 +12,31 @@
     "gaps_detected": {
       "GP": {
         "status": "up_to_date",
-        "min_date": "2026-04-30",
+        "min_date": "2025-11-02",
         "latest_date": "2026-11-01",
         "missing_days": 0
       },
       "BATBC": {
         "status": "up_to_date",
-        "min_date": "2026-04-30",
+        "min_date": "2025-11-02",
         "latest_date": "2026-11-01",
         "missing_days": 0
       },
       "SQURPHARMA": {
         "status": "up_to_date",
-        "min_date": "2026-04-30",
+        "min_date": "2025-11-02",
         "latest_date": "2026-11-01",
         "missing_days": 0
       },
       "BEXIMCO": {
         "status": "up_to_date",
-        "min_date": "2026-04-30",
+        "min_date": "2025-11-02",
         "latest_date": "2026-11-01",
         "missing_days": 0
       },
       "ROBI": {
         "status": "up_to_date",
-        "min_date": "2026-04-30",
+        "min_date": "2025-11-02",
         "latest_date": "2026-11-01",
         "missing_days": 0
       }
@@ -47,12 +47,12 @@
     "intraday_triggered": false
   },
   "last_hourly_run": {
-    "timestamp": "2026-11-01T04:05:44.651747+06:00",
+    "timestamp": "2026-11-01T04:13:22.497797+06:00",
     "status": "success",
     "updated_symbols": 5
   },
   "last_eod_run": {
-    "timestamp": "2026-11-01T04:05:44.667190+06:00",
+    "timestamp": "2026-11-01T04:13:22.513591+06:00",
     "status": "success",
     "total_inserted": 1
   },
