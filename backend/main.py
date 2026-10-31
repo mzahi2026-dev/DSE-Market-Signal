@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
     # Autonomous offline gap filling on startup (catch-up engine)
     try:
         logger.info("⚡ [Startup] Executing autonomous offline gap-filling catch-up...")
-        run_gap_filling_catchup()
+        run_gap_filling_catchup(max_batches_per_symbol=2)
     except Exception as exc:
         logger.error("FastAPI startup gap-filling error: %s", exc)
 

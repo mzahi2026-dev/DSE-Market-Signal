@@ -90,7 +90,22 @@ def test_hourly_and_eod_collection_wrappers(monkeypatch, tmp_path):
     assert state["last_eod_run"]["status"] == "success"
 
 
-def test_collection_api_endpoints():
+def test_collection_api_endpoints(monkeypatch):
+    monkeypatch.setattr(
+        data_collection,
+        "collect",
+        lambda sym, a, b: {"symbol": sym, "fetched": 1, "inserted": 1}
+    )
+    monkeypatch.setattr(
+        data_collection,
+        "collect_intraday",
+        lambda symbols: {"status": "success", "updated_symbols": len(symbols)}
+    )
+    monkeypatch.setattr(
+        data_collection,
+        "collect_daily",
+        lambda symbols: {"status": "success", "total_inserted": 1}
+    )
     with TestClient(app) as client:
         # GET /collection/status
         res = client.get("/collection/status")

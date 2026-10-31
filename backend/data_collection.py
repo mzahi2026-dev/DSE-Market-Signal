@@ -27,7 +27,7 @@ from backend.collector import (
     collect_intraday,
     get_configured_symbols
 )
-from scripts.backfill import make_batches
+from scripts.backfill import make_batches, subtract_months
 
 logger = logging.getLogger("dse.data_collection")
 
@@ -75,9 +75,16 @@ def is_dse_market_hour(dt: Optional[datetime] = None) -> bool:
 
 
 def audit_symbol_gaps(symbol: str, today: Optional[date] = None, max_lookback_days: int = 180) -> Dict:
-    """Inspect stored database records for a symbol and identify missing trading dates."""
+    """Inspect stored database records for a symbol and identify missing historical & recent trading dates.
+    
+    Verifies two zones:
+    1. Historical Horizon: from target_start (6 months ago) to earliest stored date (min_date).
+    2. Recent/Offline Horizon: from latest stored date (max_date) to yesterday.
+    """
     symbol = symbol.upper().strip()
     today = today or datetime.now(DHAKA_TZ).date()
+    target_end = today - timedelta(days=1)
+    target_start = subtract_months(target_end, months=6)
 
     with connect() as con:
         row = con.execute(
@@ -87,66 +94,72 @@ def audit_symbol_gaps(symbol: str, today: Optional[date] = None, max_lookback_da
 
     min_date_str, max_date_str, total_count = row if row else (None, None, 0)
 
+    historical_missing = []
+    forward_missing = []
+
     if not max_date_str:
-        # No data at all: gap is from max_lookback_days ago until yesterday
-        start_date = today - timedelta(days=max_lookback_days)
-        end_date = today - timedelta(days=1)
-        expected_days = get_trading_days(start_date, end_date)
+        # No data at all: full 6 months missing
+        expected_days = get_trading_days(target_start, target_end)
+        missing_strs = [d.isoformat() for d in expected_days]
         return {
             "symbol": symbol,
             "has_data": False,
             "min_date": None,
             "max_date": None,
             "total_stored_days": 0,
-            "missing_trading_days": [d.isoformat() for d in expected_days],
-            "gap_start": start_date.isoformat(),
-            "gap_end": end_date.isoformat()
+            "historical_missing_days": missing_strs,
+            "forward_missing_days": [],
+            "missing_trading_days": missing_strs,
+            "gap_start": target_start.isoformat(),
+            "gap_end": target_end.isoformat(),
+            "target_horizon_start": target_start.isoformat(),
+            "target_horizon_end": target_end.isoformat()
         }
 
-    last_collected = date.fromisoformat(max_date_str)
-    # Check if there are days between last_collected and today - 1
-    start_date = last_collected + timedelta(days=1)
-    end_date = today - timedelta(days=1)
+    stored_min = date.fromisoformat(min_date_str)
+    stored_max = date.fromisoformat(max_date_str)
 
-    if start_date > end_date:
-        # Already fully up to date up to yesterday
-        return {
-            "symbol": symbol,
-            "has_data": True,
-            "min_date": min_date_str,
-            "max_date": max_date_str,
-            "total_stored_days": total_count,
-            "missing_trading_days": [],
-            "gap_start": None,
-            "gap_end": None
-        }
+    # 1. Historical Gap (Backward): if earliest record is later than 6 months ago
+    if stored_min > target_start:
+        hist_days = get_trading_days(target_start, stored_min - timedelta(days=1))
+        historical_missing = [d.isoformat() for d in hist_days]
 
-    expected_missing = get_trading_days(start_date, end_date)
+    # 2. Forward Gap (Recent): if latest record is earlier than yesterday
+    if stored_max < target_end:
+        fwd_days = get_trading_days(stored_max + timedelta(days=1), target_end)
+        forward_missing = [d.isoformat() for d in fwd_days]
+
+    all_missing = historical_missing + forward_missing
+
     return {
         "symbol": symbol,
         "has_data": True,
         "min_date": min_date_str,
         "max_date": max_date_str,
         "total_stored_days": total_count,
-        "missing_trading_days": [d.isoformat() for d in expected_missing],
-        "gap_start": start_date.isoformat() if expected_missing else None,
-        "gap_end": end_date.isoformat() if expected_missing else None
+        "historical_missing_days": historical_missing,
+        "forward_missing_days": forward_missing,
+        "missing_trading_days": all_missing,
+        "gap_start": historical_missing[0] if historical_missing else (forward_missing[0] if forward_missing else None),
+        "gap_end": forward_missing[-1] if forward_missing else (historical_missing[-1] if historical_missing else None),
+        "target_horizon_start": target_start.isoformat(),
+        "target_horizon_end": target_end.isoformat()
     }
 
 
-def run_gap_filling_catchup(symbols: Optional[List[str]] = None, max_lookback_days: int = 180) -> Dict:
-    """Automatic offline gap filling engine executed on backend startup.
+def run_gap_filling_catchup(symbols: Optional[List[str]] = None, max_lookback_days: int = 180, max_batches_per_symbol: int = 30) -> Dict:
+    """Automatic offline & historical gap filling engine.
 
-    If the backend server was off, this function scans each configured symbol, detects
-    all missing trading days up to yesterday, and automatically executes batch backfills
-    to restore historical continuity.
+    Scans each configured symbol, detects:
+    1. Historical Missing Data: backfills backward to ensure 6 full months of history.
+    2. Offline Recent Missing Data: backfills forward to cover days server was turned off.
     """
     target_symbols = symbols or get_configured_symbols()
     target_symbols = [s.upper().strip() for s in target_symbols]
     now = datetime.now(DHAKA_TZ)
     today = now.date()
 
-    logger.info("⚡ [DataCollectionEngine] Starting offline gap detection for symbols: %s", target_symbols)
+    logger.info("⚡ [DataCollectionEngine] Starting dual-horizon gap detection for symbols: %s", target_symbols)
     state = load_collection_state()
 
     recovery_summary = {
@@ -164,36 +177,49 @@ def run_gap_filling_catchup(symbols: Optional[List[str]] = None, max_lookback_da
 
     for sym in target_symbols:
         gap_info = audit_symbol_gaps(sym, today=today, max_lookback_days=max_lookback_days)
-        missing_days = gap_info.get("missing_trading_days", [])
+        hist_missing = gap_info.get("historical_missing_days", [])
+        fwd_missing = gap_info.get("forward_missing_days", [])
+        all_missing = gap_info.get("missing_trading_days", [])
 
-        if not missing_days:
-            logger.info("✓ [DataCollectionEngine] %s is fully up-to-date (Latest: %s)", sym, gap_info.get("max_date"))
+        if not all_missing:
+            logger.info("✓ [DataCollectionEngine] %s is fully up-to-date across all 6 months (Earliest: %s, Latest: %s)", sym, gap_info.get("min_date"), gap_info.get("max_date"))
             recovery_summary["gaps_detected"][sym] = {
                 "status": "up_to_date",
+                "min_date": gap_info.get("min_date"),
                 "latest_date": gap_info.get("max_date"),
                 "missing_days": 0
             }
             continue
 
-        gap_start = date.fromisoformat(missing_days[0])
-        gap_end = date.fromisoformat(missing_days[-1])
         logger.warning(
-            "⚠️ [DataCollectionEngine] Detected gap for %s: %d missing trading days (%s to %s)",
-            sym, len(missing_days), gap_start, gap_end
+            "⚠️ [DataCollectionEngine] Gap detected for %s: %d historical missing, %d recent missing",
+            sym, len(hist_missing), len(fwd_missing)
         )
 
         recovery_summary["gaps_detected"][sym] = {
             "status": "recovering",
-            "missing_days_count": len(missing_days),
-            "missing_dates": missing_days,
-            "gap_start": str(gap_start),
-            "gap_end": str(gap_end),
+            "historical_missing_count": len(hist_missing),
+            "recent_missing_count": len(fwd_missing),
+            "total_missing_count": len(all_missing),
             "inserted": 0
         }
 
-        # Break the missing date span into safe 7-day batches for the scraper
-        batches = make_batches(gap_start, gap_end)
-        for b_start, b_end in batches:
+        # Build batches for both horizons
+        batches_to_run = []
+        if hist_missing:
+            h_start = date.fromisoformat(hist_missing[0])
+            h_end = date.fromisoformat(hist_missing[-1])
+            batches_to_run.extend(make_batches(h_start, h_end))
+
+        if fwd_missing:
+            f_start = date.fromisoformat(fwd_missing[0])
+            f_end = date.fromisoformat(fwd_missing[-1])
+            batches_to_run.extend(make_batches(f_start, f_end))
+
+        # Limit batches per symbol to respect rate limits
+        selected_batches = batches_to_run[:max_batches_per_symbol]
+
+        for b_start, b_end in selected_batches:
             try:
                 logger.info("🔄 [DataCollectionEngine] Backfilling %s: %s to %s", sym, b_start, b_end)
                 result = collect(sym, str(b_start), str(b_end))
@@ -214,10 +240,20 @@ def run_gap_filling_catchup(symbols: Optional[List[str]] = None, max_lookback_da
                 with recovery_log.open("a", encoding="utf-8") as f:
                     f.write(json.dumps(log_entry) + "\n")
 
-                # Respectful rate limiting for DSE scraper
-                time.sleep(0.5)
+                time.sleep(0.3)
             except Exception as exc:
                 logger.error("❌ [DataCollectionEngine] Failed backfill batch %s [%s-%s]: %s", sym, b_start, b_end, exc)
+                recovery_summary["status"] = "partial_error"
+                log_entry = {
+                    "timestamp": datetime.now(DHAKA_TZ).isoformat(),
+                    "symbol": sym,
+                    "batch_start": str(b_start),
+                    "batch_end": str(b_end),
+                    "status": "failed",
+                    "error": str(exc)
+                }
+                with recovery_log.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(log_entry) + "\n")
                 recovery_summary["status"] = "partial_error"
                 log_entry = {
                     "timestamp": datetime.now(DHAKA_TZ).isoformat(),
