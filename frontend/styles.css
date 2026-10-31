@@ -105,10 +105,67 @@ header {
   font-size: 12px;
   font-weight: 500;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .btn-toggle:hover {
   background: var(--border-color);
+}
+
+.btn-toggle.active {
+  background: rgba(41, 98, 255, 0.15);
+  border-color: var(--accent-blue);
+  color: #64b5f6;
+}
+
+/* Sidebar Edge Handles (TradingView Floating Collapse Tabs) */
+.sidebar-edge-handle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  width: 18px;
+  height: 48px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.2s ease, left 0.25s cubic-bezier(0.4, 0, 0.2, 1), right 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  opacity: 0.75;
+}
+
+.sidebar-edge-handle:hover {
+  opacity: 1;
+  background: var(--border-color);
+  color: var(--accent-blue);
+  width: 22px;
+}
+
+.sidebar-edge-handle.left {
+  left: var(--sidebar-width);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+.sidebar-edge-handle.left.collapsed {
+  left: 0;
+}
+
+.sidebar-edge-handle.right {
+  right: var(--sidebar-width);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+}
+
+.sidebar-edge-handle.right.collapsed {
+  right: 0;
 }
 
 /* Main Workspace */
@@ -122,12 +179,14 @@ header {
 /* Sidebars */
 .sidebar {
   width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  transition: transform 0.25s ease, margin 0.25s ease;
+  transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
   overflow-y: auto;
+  overflow-x: hidden;
   z-index: 5;
 }
 
@@ -137,7 +196,14 @@ header {
 }
 
 .sidebar.hidden {
-  display: none;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  opacity: 0 !important;
+  border: none !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden;
 }
 
 .sidebar-header {

@@ -14,21 +14,26 @@
         📈 DSE MARKET SIGNAL
         <span class="brand-badge">PRO</span>
       </div>
-      <button id="toggle-left" class="btn-toggle">Hide Left</button>
+      <button id="toggle-left" class="btn-toggle active" title="Toggle Watchlist (Hotkey: [)">◀ Watchlist</button>
       <div id="market-status" class="badge badge-closed">DSE: Checking...</div>
     </div>
 
     <div class="header-center">
+      <button id="toggle-fullscreen" class="btn-toggle" title="Maximize Chart View (Hotkey: F)">⛶ Full Chart</button>
       <div id="health-badge" class="badge badge-health">● Checking Backend...</div>
     </div>
 
     <div class="header-right">
-      <button id="toggle-right" class="btn-toggle">Hide Right</button>
+      <button id="toggle-right" class="btn-toggle active" title="Toggle Orders & Signals (Hotkey: ])">Signals & Orders ▶</button>
     </div>
   </header>
 
   <!-- Main Workspace -->
   <div class="workspace">
+    <!-- Floating Edge Handles for 1-Click Hide/Unhide -->
+    <button id="handle-left" class="sidebar-edge-handle left" title="Hide Watchlist (Hotkey: [)">◀</button>
+    <button id="handle-right" class="sidebar-edge-handle right" title="Hide Signals & Orders (Hotkey: ])">▶</button>
+
     <!-- Left Sidebar: Watchlist & Market Breadth -->
     <aside id="left-sidebar" class="sidebar">
       <div class="sidebar-header">

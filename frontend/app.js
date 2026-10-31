@@ -22,23 +22,97 @@ document.addEventListener("DOMContentLoaded", () => {
 function setupSidebarToggles() {
   const toggleLeft = document.getElementById("toggle-left");
   const toggleRight = document.getElementById("toggle-right");
+  const toggleFullscreen = document.getElementById("toggle-fullscreen");
+  const handleLeft = document.getElementById("handle-left");
+  const handleRight = document.getElementById("handle-right");
   const leftSidebar = document.getElementById("left-sidebar");
   const rightSidebar = document.getElementById("right-sidebar");
 
-  if (toggleLeft && leftSidebar) {
-    toggleLeft.addEventListener("click", () => {
-      leftSidebar.classList.toggle("hidden");
-      toggleLeft.innerText = leftSidebar.classList.contains("hidden") ? "Show Left" : "Hide Left";
-      resizeChart();
+  function setLeftState(hidden) {
+    if (!leftSidebar) return;
+    leftSidebar.classList.toggle("hidden", hidden);
+    if (toggleLeft) {
+      toggleLeft.innerText = hidden ? "▶ Watchlist" : "◀ Watchlist";
+      toggleLeft.classList.toggle("active", !hidden);
+    }
+    if (handleLeft) {
+      handleLeft.innerText = hidden ? "▶" : "◀";
+      handleLeft.classList.toggle("collapsed", hidden);
+      handleLeft.title = hidden ? "Show Watchlist (Hotkey: [)" : "Hide Watchlist (Hotkey: [)";
+    }
+    localStorage.setItem("dse_sidebar_left", hidden ? "0" : "1");
+    triggerSmoothResize();
+  }
+
+  function setRightState(hidden) {
+    if (!rightSidebar) return;
+    rightSidebar.classList.toggle("hidden", hidden);
+    if (toggleRight) {
+      toggleRight.innerText = hidden ? "◀ Signals & Orders" : "Signals & Orders ▶";
+      toggleRight.classList.toggle("active", !hidden);
+    }
+    if (handleRight) {
+      handleRight.innerText = hidden ? "◀" : "▶";
+      handleRight.classList.toggle("collapsed", hidden);
+      handleRight.title = hidden ? "Show Orders (Hotkey: ])" : "Hide Orders (Hotkey: ])";
+    }
+    localStorage.setItem("dse_sidebar_right", hidden ? "0" : "1");
+    triggerSmoothResize();
+  }
+
+  function triggerSmoothResize() {
+    resizeChart();
+    setTimeout(resizeChart, 150);
+    setTimeout(resizeChart, 280);
+  }
+
+  // Restore saved preferences
+  if (localStorage.getItem("dse_sidebar_left") === "0") setLeftState(true);
+  if (localStorage.getItem("dse_sidebar_right") === "0") setRightState(true);
+
+  if (toggleLeft) toggleLeft.addEventListener("click", () => setLeftState(!leftSidebar.classList.contains("hidden")));
+  if (handleLeft) handleLeft.addEventListener("click", () => setLeftState(!leftSidebar.classList.contains("hidden")));
+
+  if (toggleRight) toggleRight.addEventListener("click", () => setRightState(!rightSidebar.classList.contains("hidden")));
+  if (handleRight) handleRight.addEventListener("click", () => setRightState(!rightSidebar.classList.contains("hidden")));
+
+  // Fullscreen / Maximize Chart View (Hides or Restores both sidebars)
+  if (toggleFullscreen) {
+    toggleFullscreen.addEventListener("click", () => {
+      const bothHidden = leftSidebar && rightSidebar && leftSidebar.classList.contains("hidden") && rightSidebar.classList.contains("hidden");
+      if (bothHidden) {
+        setLeftState(false);
+        setRightState(false);
+        toggleFullscreen.innerText = "⛶ Full Chart";
+        toggleFullscreen.classList.remove("active");
+      } else {
+        setLeftState(true);
+        setRightState(true);
+        toggleFullscreen.innerText = "🗗 Standard View";
+        toggleFullscreen.classList.add("active");
+      }
     });
   }
 
-  if (toggleRight && rightSidebar) {
-    toggleRight.addEventListener("click", () => {
-      rightSidebar.classList.toggle("hidden");
-      toggleRight.innerText = rightSidebar.classList.contains("hidden") ? "Show Right" : "Hide Right";
-      resizeChart();
+  // Global Keyboard Shortcuts for Power Users
+  document.addEventListener("keydown", (e) => {
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+    if (e.key === "[") {
+      setLeftState(!leftSidebar.classList.contains("hidden"));
+    } else if (e.key === "]") {
+      setRightState(!rightSidebar.classList.contains("hidden"));
+    } else if (e.key === "f" || e.key === "F") {
+      if (toggleFullscreen) toggleFullscreen.click();
+    }
+  });
+
+  // Attach ResizeObserver to chart card container for real-time responsiveness
+  const chartCard = document.getElementById("chart-container");
+  if (chartCard && window.ResizeObserver) {
+    const ro = new ResizeObserver(() => {
+      renderChart(chartData, currentLevels);
     });
+    ro.observe(chartCard);
   }
 }
 
