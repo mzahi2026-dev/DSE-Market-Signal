@@ -3,16 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DSE Market Signal — TradingView Dashboard</title>
+  <title>DSE Market Signal — Professional TradingView Dashboard</title>
   <link rel="stylesheet" href="/styles.css">
+  <!-- TradingView Lightweight Charts v4.2 -->
+  <script src="/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
   <!-- Header Bar -->
   <header>
     <div class="header-left">
       <div class="brand">
-        📈 DSE MARKET SIGNAL
-        <span class="brand-badge">PRO</span>
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
+          <polyline points="16 7 22 7 22 13"></polyline>
+        </svg>
+        <span>DSE MARKET SIGNAL</span>
+        <span class="brand-badge">PRO v2.0</span>
       </div>
       <button id="toggle-left" class="btn-toggle active" title="Toggle Watchlist (Hotkey: [)">◀ Watchlist</button>
       <div id="market-status" class="badge badge-closed">DSE: Checking...</div>
@@ -38,42 +44,82 @@
     <aside id="left-sidebar" class="sidebar">
       <div class="sidebar-header">
         <span>Market Watchlist</span>
-        <span id="market-breadth-indicator">⚡</span>
+        <span id="market-breadth-indicator" title="Live DSE Stream">⚡ Live</span>
       </div>
 
-      <div class="sidebar-section">
-        <h3>Market Breadth</h3>
+      <!-- Live Search Filter -->
+      <div class="search-box-container">
+        <input id="search-symbol" type="text" placeholder="🔍 Search Ticker (e.g. GP, SQURPHARMA)..." autocomplete="off" />
+      </div>
+
+      <!-- Market Breadth Visual Meter -->
+      <div class="sidebar-section breadth-section">
+        <div class="section-title-row">
+          <h3>Market Breadth</h3>
+          <span id="breadth-total-count" class="pill-badge">DSE Total</span>
+        </div>
         <div id="market-breadth">Loading breadth...</div>
       </div>
 
-      <div class="sidebar-section" style="flex:1; overflow-y:auto; padding:0;">
+      <!-- Watchlist Items -->
+      <div class="sidebar-section watchlist-section">
         <div id="watchlist-items">
-          <div style="padding:12px; font-size:12px; color:var(--text-secondary)">Loading watchlist...</div>
+          <div class="loading-state">Loading watchlist tickers...</div>
         </div>
       </div>
     </aside>
 
-    <!-- Center View: Active Stock Header & Interactive TradingView-Style Chart -->
+    <!-- Center View: Active Stock Header & Interactive TradingView Chart -->
     <main class="main-view">
+      <!-- Stock Headline -->
       <div class="stock-headline">
         <div class="stock-title">
           <span id="active-symbol" class="stock-symbol">GP</span>
           <span id="active-price" class="stock-price">---</span>
           <span id="active-change" class="stock-change">---</span>
         </div>
-        <div style="display:flex; gap:12px; font-size:12px; color:var(--text-secondary)">
-          <span>Timeframe: <strong>Daily</strong></span>
-          <span>Feed: <strong>DSE Legacy</strong></span>
+        <div class="stock-meta-tags">
+          <span class="meta-tag">Timeframe: <strong>Daily</strong></span>
+          <span class="meta-tag">Feed: <strong>DSE Direct</strong></span>
+          <span class="meta-tag">Currency: <strong>BDT (৳)</strong></span>
         </div>
       </div>
 
+      <!-- Chart Wrapper -->
       <div class="chart-wrapper">
         <div id="chart-container" class="chart-card">
-          <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:11px; color:var(--text-secondary)">
-            <span>Legend: <span style="color:#2962ff">EMA 9</span> | <span style="color:#ff9800">EMA 21</span> | <span style="color:#ab47bc">EMA 50</span> | <span style="color:#9c27b0">RSI 14</span></span>
-            <span>Candlestick & Technical Multi-Factor Panel</span>
+          <!-- Top Interactive Legend & Crosshair Bar -->
+          <div class="chart-topbar">
+            <div id="chart-legend" class="chart-legend">
+              <span class="leg-item"><span class="leg-label">O</span> <b id="leg-open">---</b></span>
+              <span class="leg-item"><span class="leg-label">H</span> <b id="leg-high">---</b></span>
+              <span class="leg-item"><span class="leg-label">L</span> <b id="leg-low">---</b></span>
+              <span class="leg-item"><span class="leg-label">C</span> <b id="leg-close">---</b></span>
+              <span class="leg-item"><span class="leg-label">Vol</span> <b id="leg-vol">---</b></span>
+              <span class="leg-badge leg-ema9">EMA 9 <b id="leg-ema9">---</b></span>
+              <span class="leg-badge leg-ema21">EMA 21 <b id="leg-ema21">---</b></span>
+              <span class="leg-badge leg-ema50">EMA 50 <b id="leg-ema50">---</b></span>
+            </div>
+            <div class="chart-actions">
+              <button id="btn-fit-chart" class="btn-chart-tool" title="Reset Zoom / Fit All Data">⛶ Fit Data</button>
+            </div>
           </div>
-          <canvas id="priceChart"></canvas>
+
+          <!-- Main Candlestick Chart Pane (TradingView Canvas) -->
+          <div id="priceChart" class="tv-pane-main"></div>
+
+          <!-- Synchronized RSI Subpane -->
+          <div class="rsi-pane-header">
+            <div class="rsi-title">
+              <span class="rsi-indicator-dot"></span>
+              <span>RSI (14) Relative Strength: <b id="leg-rsi">---</b></span>
+            </div>
+            <div class="rsi-zones">
+              <span class="zone-tag ob">Overbought &ge; 70</span>
+              <span class="zone-tag os">Oversold &le; 30</span>
+            </div>
+          </div>
+          <div id="tv-rsi-chart" class="tv-pane-rsi"></div>
         </div>
 
         <!-- Technical Indicator Summary Cards -->
@@ -110,30 +156,44 @@
     <aside id="right-sidebar" class="sidebar right-sidebar">
       <div class="sidebar-header">
         <span>Signal & Order Panel</span>
+        <span class="pill-badge pro">AI Ready</span>
       </div>
 
-      <!-- Signal Card -->
+      <!-- Algorithmic Signal Card -->
       <div class="sidebar-section">
-        <h3>Algorithmic Signal</h3>
+        <h3>Algorithmic Confluence</h3>
         <div class="signal-box">
-          <div id="signal-badge" class="signal-tag" style="background:#555">NEUTRAL</div>
-          <div style="font-size:12px; color:var(--text-secondary); margin-bottom:10px;">
-            Confidence: <strong id="signal-confidence" style="color:#fff">---</strong>
+          <div id="signal-badge" class="signal-tag signal-hold">NEUTRAL</div>
+          <div class="signal-conf-row">
+            <span>Signal Confidence:</span>
+            <strong id="signal-confidence">---%</strong>
           </div>
-          <div style="display:flex; justify-content:space-around; font-size:12px; border-top:1px solid var(--border-color); padding-top:8px;">
-            <div>Target: <br><strong id="signal-target" style="color:var(--accent-green)">---</strong></div>
-            <div>Stop Loss: <br><strong id="signal-stop-loss" style="color:var(--accent-red)">---</strong></div>
-            <div>R:R: <br><strong id="signal-rrr">---</strong></div>
+          <div class="signal-levels-row">
+            <div class="level-box">
+              <span class="level-label">Target (TP)</span>
+              <strong id="signal-target" class="positive">---</strong>
+            </div>
+            <div class="level-box">
+              <span class="level-label">Stop Loss (SL)</span>
+              <strong id="signal-stop-loss" class="negative">---</strong>
+            </div>
+            <div class="level-box">
+              <span class="level-label">Risk/Reward</span>
+              <strong id="signal-rrr">---</strong>
+            </div>
           </div>
         </div>
 
-        <button onclick="triggerTelegramAlert()" class="btn-toggle" style="width:100%; margin-top:10px; background:#229ED9; color:#fff; border:none;">
-          📲 Send Telegram Alert
+        <button onclick="triggerTelegramAlert()" class="btn-telegram">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.37.75-.56 2.94-1.28 4.9-2.12 5.88-2.54 2.8-1.19 3.38-1.4 3.76-1.4.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .39z"/>
+          </svg>
+          Send Telegram Alert
         </button>
 
-        <h4 style="font-size:11px; text-transform:uppercase; color:var(--text-secondary); margin-top:12px; margin-bottom:4px;">Confluence Reasons</h4>
-        <ul id="signal-reasons" style="font-size:11px; color:var(--text-secondary); padding-left:16px; line-height:1.4;">
-          <li>Loading indicator confluences...</li>
+        <h4 class="subheading">Technical Confluences</h4>
+        <ul id="signal-reasons" class="signal-reasons-list">
+          <li>Calculating indicator confluences...</li>
         </ul>
       </div>
 
@@ -141,28 +201,50 @@
       <div class="sidebar-section">
         <h3>Virtual Paper Trading</h3>
         <div class="order-form">
-          <div class="form-group">
-            <label>Quantity (Shares)</label>
-            <input id="order-qty" type="number" min="1" value="10">
+          <div class="quick-qty-group">
+            <span class="qty-label">Quick Qty:</span>
+            <div class="quick-qty-buttons">
+              <button type="button" class="btn-qty" onclick="setQuickQty(10)">10</button>
+              <button type="button" class="btn-qty" onclick="setQuickQty(50)">50</button>
+              <button type="button" class="btn-qty" onclick="setQuickQty(100)">100</button>
+              <button type="button" class="btn-qty" onclick="setQuickQty(500)">500</button>
+            </div>
           </div>
+
+          <div class="form-group">
+            <label for="order-qty">Order Shares</label>
+            <input id="order-qty" type="number" min="1" value="10" oninput="calculateEstCost()">
+          </div>
+
+          <div class="order-estimate-row">
+            <span>Estimated Value:</span>
+            <strong id="order-est-cost">BDT 0.00</strong>
+          </div>
+
           <div class="order-actions">
-            <button class="btn-buy" onclick="executePaperOrder('BUY')">BUY</button>
-            <button class="btn-sell" onclick="executePaperOrder('SELL')">SELL</button>
+            <button class="btn-buy" onclick="executePaperOrder('BUY')">
+              <span>BUY</span>
+              <small>Long</small>
+            </button>
+            <button class="btn-sell" onclick="executePaperOrder('SELL')">
+              <span>SELL</span>
+              <small>Short/Exit</small>
+            </button>
           </div>
         </div>
 
-        <h4 style="font-size:11px; text-transform:uppercase; color:var(--text-secondary); margin-top:16px; margin-bottom:8px;">Virtual Portfolio</h4>
-        <div style="font-size:12px; display:flex; flex-direction:column; gap:6px;">
-          <div style="display:flex; justify-content:space-between;">
-            <span style="color:var(--text-secondary)">Cash Balance:</span>
+        <h4 class="subheading">Virtual Portfolio</h4>
+        <div class="portfolio-stats">
+          <div class="port-row">
+            <span class="port-label">Cash Balance:</span>
             <strong id="port-cash">---</strong>
           </div>
-          <div style="display:flex; justify-content:space-between;">
-            <span style="color:var(--text-secondary)">Total Equity:</span>
+          <div class="port-row">
+            <span class="port-label">Total Equity:</span>
             <strong id="port-equity">---</strong>
           </div>
-          <div style="display:flex; justify-content:space-between;">
-            <span style="color:var(--text-secondary)">Total P&L:</span>
+          <div class="port-row">
+            <span class="port-label">Unrealized P&L:</span>
             <strong id="port-pnl">---</strong>
           </div>
         </div>
@@ -172,12 +254,18 @@
 
   <!-- Footer Status Bar -->
   <footer>
-    <span id="scheduler-info">Scheduler: Active (16:30 Asia/Dhaka)</span>
-    <span>DSE Market Signal — Autonomous Architecture</span>
-    <span>DSE Circuit Bands: Active</span>
+    <div class="footer-left">
+      <span id="scheduler-info">Scheduler: Active (16:30 BST)</span>
+      <span class="separator">|</span>
+      <span>DSE Market Signal Autonomous Engine</span>
+    </div>
+    <div class="footer-right">
+      <span class="badge-circuit">⚡ DSE Circuit Bands: Active</span>
+      <span class="separator">|</span>
+      <span id="clock-display">UTC+6</span>
+    </div>
   </footer>
 
   <script src="/app.js"></script>
 </body>
 </html>
-

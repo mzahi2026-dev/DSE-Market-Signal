@@ -1,12 +1,31 @@
-// DSE Market Signal - TradingView-Style Interactive Dashboard
+// DSE Market Signal — Professional TradingView Interactive Dashboard
 
 let currentSymbol = "GP";
+let currentPrice = 0.0;
 let chartData = [];
 let currentLevels = null;
+let allWatchlistTickers = [];
 
-// Initialize dashboard on load
+// Lightweight Charts instances & series
+let mainChart = null;
+let candleSeries = null;
+let volumeSeries = null;
+let ema9Series = null;
+let ema21Series = null;
+let ema50Series = null;
+let activePriceLines = [];
+
+let rsiChart = null;
+let rsiSeries = null;
+let isSyncingRange = false;
+
+// Initialize dashboard on DOM load
 document.addEventListener("DOMContentLoaded", () => {
   setupSidebarToggles();
+  initLightweightCharts();
+  setupSearchFilter();
+  setupClock();
+
   fetchSystemHealth();
   fetchMarketStatus();
   fetchMarketSummary();
@@ -17,6 +36,276 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(fetchSystemHealth, 30000);
   setInterval(fetchMarketStatus, 60000);
 });
+
+// Setup Real-time Header Clock
+function setupClock() {
+  const clockEl = document.getElementById("clock-display");
+  function tick() {
+    if (!clockEl) return;
+    const now = new Date();
+    clockEl.innerText = now.toLocaleTimeString("en-GB", { timeZone: "Asia/Dhaka" }) + " BST";
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// Initialize TradingView Lightweight Charts
+function initLightweightCharts() {
+  const mainContainer = document.getElementById("priceChart");
+  const rsiContainer = document.getElementById("tv-rsi-chart");
+
+  if (!mainContainer || typeof LightweightCharts === "undefined") {
+    console.warn("LightweightCharts not loaded or container missing; using fallback.");
+    return;
+  }
+
+  // 1. Create Main Candlestick Chart
+  mainChart = LightweightCharts.createChart(mainContainer, {
+    autoSize: true,
+    layout: {
+      background: { type: "solid", color: "#1e222d" },
+      textColor: "#d1d4dc",
+      fontSize: 11,
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    },
+    grid: {
+      vertLines: { color: "rgba(54, 60, 78, 0.35)", style: LightweightCharts.LineStyle.Solid },
+      horzLines: { color: "rgba(54, 60, 78, 0.35)", style: LightweightCharts.LineStyle.Solid }
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: {
+        color: "#787b86",
+        width: 1,
+        style: LightweightCharts.LineStyle.Dashed,
+        labelBackgroundColor: "#2a2e39"
+      },
+      horzLine: {
+        color: "#787b86",
+        width: 1,
+        style: LightweightCharts.LineStyle.Dashed,
+        labelBackgroundColor: "#2a2e39"
+      }
+    },
+    rightPriceScale: {
+      borderColor: "#363c4e",
+      scaleMargins: {
+        top: 0.08,
+        bottom: 0.22 // Room for volume overlay
+      }
+    },
+    timeScale: {
+      borderColor: "#363c4e",
+      timeVisible: true,
+      secondsVisible: false
+    }
+  });
+
+  // Candlestick Series
+  candleSeries = mainChart.addCandlestickSeries({
+    upColor: "#089981",
+    downColor: "#f23645",
+    borderUpColor: "#089981",
+    borderDownColor: "#f23645",
+    wickUpColor: "#089981",
+    wickDownColor: "#f23645"
+  });
+
+  // Volume Overlay Series
+  volumeSeries = mainChart.addHistogramSeries({
+    priceFormat: { type: "volume" },
+    priceScaleId: "", // Overlay mode
+    scaleMargins: {
+      top: 0.8,
+      bottom: 0
+    }
+  });
+
+  // EMA Series
+  ema9Series = mainChart.addLineSeries({
+    color: "#2962ff",
+    lineWidth: 2,
+    title: "EMA 9",
+    priceLineVisible: false,
+    lastValueVisible: false
+  });
+
+  ema21Series = mainChart.addLineSeries({
+    color: "#ff9800",
+    lineWidth: 2,
+    title: "EMA 21",
+    priceLineVisible: false,
+    lastValueVisible: false
+  });
+
+  ema50Series = mainChart.addLineSeries({
+    color: "#ab47bc",
+    lineWidth: 2,
+    title: "EMA 50",
+    priceLineVisible: false,
+    lastValueVisible: false
+  });
+
+  // 2. Create Synchronized RSI Chart
+  if (rsiContainer) {
+    rsiChart = LightweightCharts.createChart(rsiContainer, {
+      autoSize: true,
+      layout: {
+        background: { type: "solid", color: "#1e222d" },
+        textColor: "#787b86",
+        fontSize: 10
+      },
+      grid: {
+        vertLines: { color: "rgba(54, 60, 78, 0.25)" },
+        horzLines: { color: "rgba(54, 60, 78, 0.25)" }
+      },
+      rightPriceScale: {
+        borderColor: "#363c4e",
+        scaleMargins: { top: 0.1, bottom: 0.1 }
+      },
+      timeScale: {
+        borderColor: "#363c4e",
+        visible: false // Hidden on subpane for seamless look
+      }
+    });
+
+    rsiSeries = rsiChart.addLineSeries({
+      color: "#ab47bc",
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: true
+    });
+
+    // Reference lines for Overbought (70) and Oversold (30)
+    rsiSeries.createPriceLine({
+      price: 70,
+      color: "rgba(242, 54, 69, 0.7)",
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "OB 70"
+    });
+
+    rsiSeries.createPriceLine({
+      price: 30,
+      color: "rgba(8, 153, 129, 0.7)",
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "OS 30"
+    });
+
+    // Synchronize TimeScales
+    mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (isSyncingRange || !range || !rsiChart) return;
+      isSyncingRange = true;
+      rsiChart.timeScale().setVisibleLogicalRange(range);
+      isSyncingRange = false;
+    });
+
+    rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+      if (isSyncingRange || !range || !mainChart) return;
+      isSyncingRange = true;
+      mainChart.timeScale().setVisibleLogicalRange(range);
+      isSyncingRange = false;
+    });
+  }
+
+  // Crosshair hover legend listener
+  mainChart.subscribeCrosshairMove(param => {
+    updateLegendOnHover(param);
+  });
+
+  // Fit Data button
+  const fitBtn = document.getElementById("btn-fit-chart");
+  if (fitBtn) {
+    fitBtn.addEventListener("click", () => {
+      if (mainChart) mainChart.timeScale().fitContent();
+      if (rsiChart) rsiChart.timeScale().fitContent();
+    });
+  }
+}
+
+// Update Top Legend during Crosshair movement
+function updateLegendOnHover(param) {
+  const oEl = document.getElementById("leg-open");
+  const hEl = document.getElementById("leg-high");
+  const lEl = document.getElementById("leg-low");
+  const cEl = document.getElementById("leg-close");
+  const vEl = document.getElementById("leg-vol");
+  const ema9El = document.getElementById("leg-ema9");
+  const ema21El = document.getElementById("leg-ema21");
+  const ema50El = document.getElementById("leg-ema50");
+  const rsiEl = document.getElementById("leg-rsi");
+
+  if (!param || !param.time || !param.seriesData) {
+    // Reset to latest data point when cursor leaves
+    setLegendToLatest();
+    return;
+  }
+
+  const cData = param.seriesData.get(candleSeries);
+  if (cData) {
+    if (oEl) oEl.innerText = cData.open ? cData.open.toFixed(1) : "---";
+    if (hEl) hEl.innerText = cData.high ? cData.high.toFixed(1) : "---";
+    if (lEl) lEl.innerText = cData.low ? cData.low.toFixed(1) : "---";
+    if (cEl) {
+      cEl.innerText = cData.close ? cData.close.toFixed(1) : "---";
+      cEl.style.color = (cData.close >= cData.open) ? "var(--accent-green)" : "var(--accent-red)";
+    }
+  }
+
+  const vData = param.seriesData.get(volumeSeries);
+  if (vData && vEl) {
+    vEl.innerText = Math.round(vData.value).toLocaleString();
+  }
+
+  const ema9Val = param.seriesData.get(ema9Series);
+  if (ema9Val && ema9El) ema9El.innerText = ema9Val.value ? ema9Val.value.toFixed(1) : "---";
+
+  const ema21Val = param.seriesData.get(ema21Series);
+  if (ema21Val && ema21El) ema21El.innerText = ema21Val.value ? ema21Val.value.toFixed(1) : "---";
+
+  const ema50Val = param.seriesData.get(ema50Series);
+  if (ema50Val && ema50El) ema50El.innerText = ema50Val.value ? ema50Val.value.toFixed(1) : "---";
+
+  // RSI for hovered date
+  if (param.time && chartData.length > 0) {
+    const item = chartData.find(d => d.date === param.time);
+    if (item && rsiEl) {
+      rsiEl.innerText = item.rsi_14 ? item.rsi_14.toFixed(1) : "---";
+    }
+  }
+}
+
+// Reset Legend to latest available bar
+function setLegendToLatest() {
+  if (!chartData || chartData.length === 0) return;
+  const last = chartData[chartData.length - 1];
+
+  const oEl = document.getElementById("leg-open");
+  const hEl = document.getElementById("leg-high");
+  const lEl = document.getElementById("leg-low");
+  const cEl = document.getElementById("leg-close");
+  const vEl = document.getElementById("leg-vol");
+  const ema9El = document.getElementById("leg-ema9");
+  const ema21El = document.getElementById("leg-ema21");
+  const ema50El = document.getElementById("leg-ema50");
+  const rsiEl = document.getElementById("leg-rsi");
+
+  if (oEl) oEl.innerText = last.open ? last.open.toFixed(1) : "---";
+  if (hEl) hEl.innerText = last.high ? last.high.toFixed(1) : "---";
+  if (lEl) lEl.innerText = last.low ? last.low.toFixed(1) : "---";
+  if (cEl) {
+    cEl.innerText = last.close ? last.close.toFixed(1) : "---";
+    cEl.style.color = (last.close >= last.open) ? "var(--accent-green)" : "var(--accent-red)";
+  }
+  if (vEl) vEl.innerText = last.volume ? Math.round(last.volume).toLocaleString() : "---";
+  if (ema9El) ema9El.innerText = last.ema_9 ? last.ema_9.toFixed(1) : "---";
+  if (ema21El) ema21El.innerText = last.ema_21 ? last.ema_21.toFixed(1) : "---";
+  if (ema50El) ema50El.innerText = last.ema_50 ? last.ema_50.toFixed(1) : "---";
+  if (rsiEl) rsiEl.innerText = last.rsi_14 ? last.rsi_14.toFixed(1) : "---";
+}
 
 // Sidebar Toggle Handlers
 function setupSidebarToggles() {
@@ -76,7 +365,7 @@ function setupSidebarToggles() {
   if (toggleRight) toggleRight.addEventListener("click", () => setRightState(!rightSidebar.classList.contains("hidden")));
   if (handleRight) handleRight.addEventListener("click", () => setRightState(!rightSidebar.classList.contains("hidden")));
 
-  // Fullscreen / Maximize Chart View (Hides or Restores both sidebars)
+  // Fullscreen / Maximize Chart View
   if (toggleFullscreen) {
     toggleFullscreen.addEventListener("click", () => {
       const bothHidden = leftSidebar && rightSidebar && leftSidebar.classList.contains("hidden") && rightSidebar.classList.contains("hidden");
@@ -94,7 +383,7 @@ function setupSidebarToggles() {
     });
   }
 
-  // Global Keyboard Shortcuts for Power Users
+  // Global Keyboard Shortcuts
   document.addEventListener("keydown", (e) => {
     if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
     if (e.key === "[") {
@@ -106,14 +395,54 @@ function setupSidebarToggles() {
     }
   });
 
-  // Attach ResizeObserver to chart card container for real-time responsiveness
+  // Attach ResizeObserver to container
   const chartCard = document.getElementById("chart-container");
   if (chartCard && window.ResizeObserver) {
     const ro = new ResizeObserver(() => {
-      renderChart(chartData, currentLevels);
+      resizeChart();
     });
     ro.observe(chartCard);
   }
+}
+
+// Watchlist Live Search Filter
+function setupSearchFilter() {
+  const searchInput = document.getElementById("search-symbol");
+  if (!searchInput) return;
+
+  searchInput.addEventListener("input", (e) => {
+    const query = e.target.value.trim().toUpperCase();
+    renderFilteredWatchlist(query);
+  });
+}
+
+function renderFilteredWatchlist(query) {
+  const watchlistEl = document.getElementById("watchlist-items");
+  if (!watchlistEl) return;
+
+  const filtered = query
+    ? allWatchlistTickers.filter(s => s.symbol.toUpperCase().includes(query))
+    : allWatchlistTickers;
+
+  if (filtered.length === 0) {
+    watchlistEl.innerHTML = `<div class="loading-state">No symbols match "${query}"</div>`;
+    return;
+  }
+
+  watchlistEl.innerHTML = filtered.map(s => `
+    <div class="watchlist-item ${s.symbol === currentSymbol ? 'active' : ''}" onclick="selectSymbol('${s.symbol}')">
+      <div>
+        <div class="ticker-sym">${s.symbol}</div>
+        <div class="ticker-vol">Vol: ${Math.round(s.volume).toLocaleString()}</div>
+      </div>
+      <div>
+        <div class="ticker-price">৳${s.close.toFixed(1)}</div>
+        <div class="change-chip ${s.change_pct >= 0 ? 'positive' : 'negative'}">
+          ${s.change_pct >= 0 ? '+' : ''}${s.change_pct.toFixed(2)}%
+        </div>
+      </div>
+    </div>
+  `).join("");
 }
 
 // Fetch System Health
@@ -126,7 +455,7 @@ async function fetchSystemHealth() {
     const schedulerInfo = document.getElementById("scheduler-info");
 
     if (healthBadge) {
-      healthBadge.innerHTML = `<span style="color:#089981">●</span> Backend Healthy`;
+      healthBadge.innerHTML = `<span style="color:var(--accent-green)">●</span> Backend Healthy`;
     }
     if (schedulerInfo) {
       schedulerInfo.innerText = `Scheduler: ${data.scheduler_running ? 'Active (16:30 BST)' : 'Standby'}`;
@@ -159,33 +488,46 @@ async function fetchMarketSummary() {
     if (!res.ok) return;
     const data = await res.json();
 
+    const adv = data.advancers || 0;
+    const dec = data.decliners || 0;
+    const unch = data.unchanged || 0;
+    const total = adv + dec + unch || 1;
+
+    const advPct = ((adv / total) * 100).toFixed(1);
+    const decPct = ((dec / total) * 100).toFixed(1);
+    const unchPct = ((unch / total) * 100).toFixed(1);
+
+    const countBadge = document.getElementById("breadth-total-count");
+    if (countBadge) countBadge.innerText = `${total} Issues`;
+
     const breadthEl = document.getElementById("market-breadth");
     if (breadthEl) {
       breadthEl.innerHTML = `
-        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
-          <span class="positive">▲ ${data.advancers} Adv</span>
-          <span class="negative">▼ ${data.decliners} Dec</span>
-          <span>● ${data.unchanged} Unch</span>
+        <div class="breadth-meter-bar">
+          <div class="breadth-seg-adv" style="width: ${advPct}%" title="Advancers: ${adv} (${advPct}%)"></div>
+          <div class="breadth-seg-dec" style="width: ${decPct}%" title="Decliners: ${dec} (${decPct}%)"></div>
+          <div class="breadth-seg-unch" style="width: ${unchPct}%" title="Unchanged: ${unch} (${unchPct}%)"></div>
+        </div>
+        <div class="breadth-stats-row">
+          <div class="breadth-pill adv">
+            <span class="count">▲ ${adv}</span>
+            <span>Adv (${advPct}%)</span>
+          </div>
+          <div class="breadth-pill dec">
+            <span class="count">▼ ${dec}</span>
+            <span>Dec (${decPct}%)</span>
+          </div>
+          <div class="breadth-pill unch">
+            <span class="count">● ${unch}</span>
+            <span>Unch (${unchPct}%)</span>
+          </div>
         </div>
       `;
     }
 
-    const watchlistEl = document.getElementById("watchlist-items");
-    if (watchlistEl && data.top_gainers) {
-      watchlistEl.innerHTML = data.top_gainers.map(s => `
-        <div class="watchlist-item ${s.symbol === currentSymbol ? 'active' : ''}" onclick="selectSymbol('${s.symbol}')">
-          <div>
-            <strong>${s.symbol}</strong>
-            <div style="font-size:11px; color:var(--text-secondary)">Vol: ${Math.round(s.volume).toLocaleString()}</div>
-          </div>
-          <div style="text-align:right">
-            <div>BDT ${s.close.toFixed(1)}</div>
-            <div class="${s.change_pct >= 0 ? 'positive' : 'negative'}" style="font-size:11px">
-              ${s.change_pct >= 0 ? '+' : ''}${s.change_pct.toFixed(2)}%
-            </div>
-          </div>
-        </div>
-      `).join("");
+    if (data.top_gainers) {
+      allWatchlistTickers = data.top_gainers;
+      renderFilteredWatchlist("");
     }
   } catch (err) {
     console.error("Market summary fetch error:", err);
@@ -196,16 +538,16 @@ async function fetchMarketSummary() {
 async function loadStockData(symbol) {
   currentSymbol = symbol;
   try {
-    // Fetch technical analysis & signal
     const [anaRes, sigRes, indRes] = await Promise.all([
       fetch(`/analysis/${symbol}`),
       fetch(`/signals/${symbol}`),
-      fetch(`/indicators/${symbol}?limit=60`)
+      fetch(`/indicators/${symbol}?limit=90`)
     ]);
 
     let levels = null;
     if (anaRes.ok) {
       const ana = await anaRes.json();
+      currentPrice = ana.price.close;
       updateStockHeader(ana);
       updateTechnicalLevels(ana);
       levels = ana.levels;
@@ -225,6 +567,8 @@ async function loadStockData(symbol) {
       currentLevels = levels;
       renderChart(chartData, currentLevels);
     }
+
+    calculateEstCost();
   } catch (err) {
     console.error("Error loading stock:", err);
   }
@@ -234,6 +578,8 @@ function selectSymbol(sym) {
   loadStockData(sym);
   const items = document.querySelectorAll(".watchlist-item");
   items.forEach(el => el.classList.remove("active"));
+  const searchInput = document.getElementById("search-symbol");
+  renderFilteredWatchlist(searchInput ? searchInput.value.trim().toUpperCase() : "");
 }
 
 function updateStockHeader(ana) {
@@ -242,7 +588,7 @@ function updateStockHeader(ana) {
   const changeEl = document.getElementById("active-change");
 
   if (symEl) symEl.innerText = ana.symbol;
-  if (priceEl) priceEl.innerText = `BDT ${ana.price.close.toFixed(1)}`;
+  if (priceEl) priceEl.innerText = `BDT ৳${ana.price.close.toFixed(1)}`;
   if (changeEl) {
     const chg = ana.price.change;
     const pct = ana.price.change_pct;
@@ -265,9 +611,9 @@ function updateTechnicalLevels(ana) {
     trendEl.innerText = ana.trend;
     trendEl.className = `stat-value ${ana.trend === 'Bullish' ? 'positive' : (ana.trend === 'Bearish' ? 'negative' : '')}`;
   }
-  if (pivotEl) pivotEl.innerText = ana.levels.pivot.toFixed(1);
-  if (s1El) s1El.innerText = ana.levels.support_1.toFixed(1);
-  if (r1El) r1El.innerText = ana.levels.resistance_1.toFixed(1);
+  if (pivotEl) pivotEl.innerText = `৳${ana.levels.pivot.toFixed(1)}`;
+  if (s1El) s1El.innerText = `৳${ana.levels.support_1.toFixed(1)}`;
+  if (r1El) r1El.innerText = `৳${ana.levels.resistance_1.toFixed(1)}`;
 }
 
 function updateSignalCard(sig) {
@@ -283,8 +629,8 @@ function updateSignalCard(sig) {
     badge.className = `signal-tag ${sig.signal.includes('BUY') ? 'signal-buy' : (sig.signal.includes('SELL') ? 'signal-sell' : 'signal-hold')}`;
   }
   if (conf) conf.innerText = `${sig.confidence}%`;
-  if (target) target.innerText = `BDT ${sig.target.toFixed(1)}`;
-  if (sl) sl.innerText = `BDT ${sig.stop_loss.toFixed(1)}`;
+  if (target) target.innerText = `৳${sig.target.toFixed(1)}`;
+  if (sl) sl.innerText = `৳${sig.stop_loss.toFixed(1)}`;
   if (rrr) rrr.innerText = `1:${sig.risk_reward_ratio}`;
 
   if (reasonsEl && sig.reasons) {
@@ -292,225 +638,164 @@ function updateSignalCard(sig) {
   }
 }
 
-// Interactive HTML5 Canvas Candlestick & Technical Chart
+// Render TradingView Candlestick Chart, Overlays, and S&R Levels
 function renderChart(data, levels = currentLevels) {
-  const canvas = document.getElementById("priceChart");
-  if (!canvas || !data || data.length === 0) return;
+  if (!mainChart || !candleSeries || !data || data.length === 0) return;
 
-  const ctx = canvas.getContext("2d");
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * window.devicePixelRatio;
-  canvas.height = rect.height * window.devicePixelRatio;
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  // Clean and deduplicate data sorted by date ascending
+  const cleanData = [];
+  const seenDates = new Set();
 
-  const w = rect.width;
-  const h = rect.height;
+  const sorted = [...data].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  for (const item of sorted) {
+    if (!item.date || seenDates.has(item.date) || !item.close || item.close <= 0) continue;
+    seenDates.add(item.date);
 
-  // Split canvas: Top 70% Price & MA/Bollinger, Bottom 30% RSI
-  const priceH = h * 0.70;
-  const rsiH = h * 0.25;
-  const rsiTop = h * 0.75;
+    const close = item.close;
+    const open = (item.open && item.open > 0) ? item.open : close;
+    const high = (item.high && item.high > 0) ? Math.max(item.high, open, close) : Math.max(open, close);
+    const low = (item.low && item.low > 0) ? Math.min(item.low, open, close) : Math.min(open, close);
 
-  ctx.clearRect(0, 0, w, h);
-
-  // Calculate Price Scaling including indicators & support/resistance levels
-  const prices = [];
-  data.forEach(d => {
-    const c = d.close;
-    const h = d.high > 0 ? d.high : c;
-    const l = d.low > 0 ? d.low : c;
-    prices.push(h, l);
-    if (d.bb_upper && d.bb_upper > 0) prices.push(d.bb_upper);
-    if (d.bb_lower && d.bb_lower > 0) prices.push(d.bb_lower);
-  });
-  if (levels && levels.resistance_1 && levels.resistance_1 > 0) prices.push(levels.resistance_1);
-  if (levels && levels.support_1 && levels.support_1 > 0) prices.push(levels.support_1);
-  if (levels && levels.pivot && levels.pivot > 0) prices.push(levels.pivot);
-
-  const validPrices = prices.filter(p => p > 0);
-  const minP = validPrices.length ? Math.min(...validPrices) * 0.99 : 100;
-  const maxP = validPrices.length ? Math.max(...validPrices) * 1.01 : 300;
-  const pRange = maxP - minP || 1;
-
-  const getY = (val) => priceH - ((val - minP) / pRange * (priceH - 20)) - 10;
-  const getRsiY = (rsiVal) => rsiTop + rsiH - (rsiVal / 100 * rsiH);
-
-  const n = data.length;
-  const candleW = Math.max(3, (w - 60) / n * 0.65);
-  const step = (w - 60) / n;
-
-  // Grid lines
-  ctx.strokeStyle = "#2a2e39";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const y = 10 + (priceH / 4) * i;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w - 50, y);
-    ctx.stroke();
-
-    const priceLabel = (maxP - (pRange / 4) * i).toFixed(1);
-    ctx.fillStyle = "#787b86";
-    ctx.font = "10px sans-serif";
-    ctx.fillText(priceLabel, w - 45, y + 3);
+    cleanData.push({
+      date: item.date,
+      open,
+      high,
+      low,
+      close,
+      volume: item.volume || 0,
+      ema_9: item.ema_9,
+      ema_21: item.ema_21,
+      ema_50: item.ema_50,
+      rsi_14: item.rsi_14
+    });
   }
 
-  // Draw Candlesticks
-  data.forEach((d, i) => {
-    const x = 20 + i * step;
-    const close = d.close;
-    const open = d.open > 0 ? d.open : close;
-    const high = Math.max(d.high > 0 ? d.high : close, Math.max(open, close));
-    const low = Math.min(d.low > 0 ? d.low : close, Math.min(open, close));
-    const isBull = close >= open;
-    const color = isBull ? "#089981" : "#f23645";
+  if (cleanData.length === 0) return;
 
-    // Wick
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x, getY(high));
-    ctx.lineTo(x, getY(low));
-    ctx.stroke();
+  // 1. Candlestick series
+  const candlePoints = cleanData.map(d => ({
+    time: d.date,
+    open: d.open,
+    high: d.high,
+    low: d.low,
+    close: d.close
+  }));
+  candleSeries.setData(candlePoints);
 
-    // Body
-    ctx.fillStyle = color;
-    const bodyTop = getY(Math.max(open, close));
-    const bodyH = Math.max(2, Math.abs(getY(close) - getY(open)));
-    ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyH);
+  // 2. Volume series
+  if (volumeSeries) {
+    const volumePoints = cleanData.map(d => ({
+      time: d.date,
+      value: d.volume,
+      color: d.close >= d.open ? "rgba(8, 153, 129, 0.4)" : "rgba(242, 54, 69, 0.4)"
+    }));
+    volumeSeries.setData(volumePoints);
+  }
+
+  // 3. EMA lines
+  if (ema9Series) {
+    const ema9Points = cleanData.filter(d => d.ema_9 && d.ema_9 > 0).map(d => ({ time: d.date, value: d.ema_9 }));
+    ema9Series.setData(ema9Points);
+  }
+  if (ema21Series) {
+    const ema21Points = cleanData.filter(d => d.ema_21 && d.ema_21 > 0).map(d => ({ time: d.date, value: d.ema_21 }));
+    ema21Series.setData(ema21Points);
+  }
+  if (ema50Series) {
+    const ema50Points = cleanData.filter(d => d.ema_50 && d.ema_50 > 0).map(d => ({ time: d.date, value: d.ema_50 }));
+    ema50Series.setData(ema50Points);
+  }
+
+  // 4. RSI Series
+  if (rsiSeries) {
+    const rsiPoints = cleanData.filter(d => d.rsi_14 && d.rsi_14 > 0).map(d => ({ time: d.date, value: d.rsi_14 }));
+    rsiSeries.setData(rsiPoints);
+  }
+
+  // 5. Support & Resistance Native Price Lines
+  activePriceLines.forEach(line => {
+    try { candleSeries.removePriceLine(line); } catch (e) {}
   });
+  activePriceLines = [];
 
-  // Draw EMA Lines (EMA 9: Blue, EMA 21: Orange, EMA 50: Purple)
-  drawIndicatorLine(ctx, data, "ema_9", getY, step, "#2962ff");
-  drawIndicatorLine(ctx, data, "ema_21", getY, step, "#ff9800");
-  drawIndicatorLine(ctx, data, "ema_50", getY, step, "#ab47bc");
-
-  // Draw Support, Resistance & Pivot Reference Lines
   if (levels) {
-    // Resistance 1 (R1) - Red dashed line with badge
-    if (levels.resistance_1) {
-      const rY = getY(levels.resistance_1);
-      if (rY >= 5 && rY <= priceH - 5) {
-        ctx.save();
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "#ef5350";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, rY);
-        ctx.lineTo(w - 60, rY);
-        ctx.stroke();
-
-        ctx.fillStyle = "#ef5350";
-        ctx.fillRect(w - 60, rY - 7, 56, 14);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 9px sans-serif";
-        ctx.fillText(`R1 ${levels.resistance_1.toFixed(1)}`, w - 57, rY + 4);
-        ctx.restore();
-      }
+    // Resistance 1
+    if (levels.resistance_1 && levels.resistance_1 > 0) {
+      activePriceLines.push(candleSeries.createPriceLine({
+        price: levels.resistance_1,
+        color: "#ef5350",
+        lineWidth: 2,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `R1 ${levels.resistance_1.toFixed(1)}`
+      }));
     }
 
-    // Support 1 (S1) - Green dashed line with badge
-    if (levels.support_1) {
-      const sY = getY(levels.support_1);
-      if (sY >= 5 && sY <= priceH - 5) {
-        ctx.save();
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "#089981";
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(0, sY);
-        ctx.lineTo(w - 60, sY);
-        ctx.stroke();
-
-        ctx.fillStyle = "#089981";
-        ctx.fillRect(w - 60, sY - 7, 56, 14);
-        ctx.fillStyle = "#ffffff";
-        ctx.font = "bold 9px sans-serif";
-        ctx.fillText(`S1 ${levels.support_1.toFixed(1)}`, w - 57, sY + 4);
-        ctx.restore();
-      }
+    // Support 1
+    if (levels.support_1 && levels.support_1 > 0) {
+      activePriceLines.push(candleSeries.createPriceLine({
+        price: levels.support_1,
+        color: "#089981",
+        lineWidth: 2,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `S1 ${levels.support_1.toFixed(1)}`
+      }));
     }
 
-    // Classic Pivot - Gold dashed line with label
-    if (levels.pivot) {
-      const pY = getY(levels.pivot);
-      if (pY >= 5 && pY <= priceH - 5) {
-        ctx.save();
-        ctx.setLineDash([2, 4]);
-        ctx.strokeStyle = "#f0b90b99";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, pY);
-        ctx.lineTo(w - 60, pY);
-        ctx.stroke();
-
-        ctx.fillStyle = "#f0b90b";
-        ctx.font = "9px sans-serif";
-        ctx.fillText(`P ${levels.pivot.toFixed(1)}`, w - 50, pY + 3);
-        ctx.restore();
-      }
+    // Classic Pivot
+    if (levels.pivot && levels.pivot > 0) {
+      activePriceLines.push(candleSeries.createPriceLine({
+        price: levels.pivot,
+        color: "#f0b90b",
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dotted,
+        axisLabelVisible: true,
+        title: `P ${levels.pivot.toFixed(1)}`
+      }));
     }
   }
 
-  // RSI Subpanel
-  ctx.strokeStyle = "#363c4e";
-  ctx.beginPath();
-  ctx.moveTo(0, rsiTop);
-  ctx.lineTo(w, rsiTop);
-  ctx.stroke();
-
-  // RSI 70/30 guides
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = "#787b86";
-  ctx.beginPath();
-  ctx.moveTo(0, getRsiY(70));
-  ctx.lineTo(w - 50, getRsiY(70));
-  ctx.moveTo(0, getRsiY(30));
-  ctx.lineTo(w - 50, getRsiY(30));
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  ctx.fillStyle = "#787b86";
-  ctx.fillText("70", w - 45, getRsiY(70) + 3);
-  ctx.fillText("30", w - 45, getRsiY(30) + 3);
-
-  // RSI Line
-  ctx.strokeStyle = "#9c27b0";
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  data.forEach((d, i) => {
-    const x = 20 + i * step;
-    const y = getRsiY(d.rsi_14 || 50);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.stroke();
-}
-
-function drawIndicatorLine(ctx, data, field, getY, step, color) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  let started = false;
-  data.forEach((d, i) => {
-    if (d[field] && d[field] > 0) {
-      const x = 20 + i * step;
-      const y = getY(d[field]);
-      if (!started) {
-        ctx.moveTo(x, y);
-        started = true;
-      } else {
-        ctx.lineTo(x, y);
-      }
-    }
-  });
-  ctx.stroke();
+  // Fit view & update legend
+  mainChart.timeScale().fitContent();
+  if (rsiChart) rsiChart.timeScale().fitContent();
+  setLegendToLatest();
 }
 
 function resizeChart() {
-  setTimeout(() => renderChart(chartData, currentLevels), 100);
+  if (mainChart) {
+    const mainContainer = document.getElementById("priceChart");
+    if (mainContainer) {
+      mainChart.applyOptions({ width: mainContainer.clientWidth, height: mainContainer.clientHeight });
+    }
+  }
+  if (rsiChart) {
+    const rsiContainer = document.getElementById("tv-rsi-chart");
+    if (rsiContainer) {
+      rsiChart.applyOptions({ width: rsiContainer.clientWidth, height: rsiContainer.clientHeight });
+    }
+  }
 }
 window.addEventListener("resize", resizeChart);
+
+// Quick Quantity Buttons & Est. Cost Calculation
+function setQuickQty(qty) {
+  const qtyInput = document.getElementById("order-qty");
+  if (qtyInput) {
+    qtyInput.value = qty;
+    calculateEstCost();
+  }
+}
+
+function calculateEstCost() {
+  const qtyInput = document.getElementById("order-qty");
+  const costEl = document.getElementById("order-est-cost");
+  if (!qtyInput || !costEl) return;
+
+  const qty = parseInt(qtyInput.value) || 0;
+  const totalCost = (currentPrice * qty);
+  costEl.innerText = `BDT ৳${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 // Paper Trading Order Submission
 async function executePaperOrder(side) {
@@ -523,10 +808,10 @@ async function executePaperOrder(side) {
     });
     const data = await res.json();
     if (res.ok) {
-      alert(`Order ${side} ${qty} ${currentSymbol} executed successfully!`);
+      alert(`✅ Order ${side} ${qty} ${currentSymbol} executed successfully!\nFill Price: ৳${data.fill_price.toFixed(1)}`);
       fetchPortfolio();
     } else {
-      alert(`Order failed: ${data.detail || 'Error'}`);
+      alert(`❌ Order failed: ${data.detail || 'Error'}`);
     }
   } catch (err) {
     alert("Order execution error: " + err);
@@ -544,10 +829,10 @@ async function fetchPortfolio() {
     const equityEl = document.getElementById("port-equity");
     const pnlEl = document.getElementById("port-pnl");
 
-    if (cashEl) cashEl.innerText = `BDT ${data.cash_balance.toLocaleString()}`;
-    if (equityEl) equityEl.innerText = `BDT ${data.total_equity.toLocaleString()}`;
+    if (cashEl) cashEl.innerText = `৳${data.cash_balance.toLocaleString()}`;
+    if (equityEl) equityEl.innerText = `৳${data.total_equity.toLocaleString()}`;
     if (pnlEl) {
-      pnlEl.innerText = `${data.total_pnl >= 0 ? '+' : ''}${data.total_pnl.toFixed(1)} (${data.total_return_pct.toFixed(2)}%)`;
+      pnlEl.innerText = `${data.total_pnl >= 0 ? '+' : ''}৳${data.total_pnl.toFixed(1)} (${data.total_return_pct.toFixed(2)}%)`;
       pnlEl.className = data.total_pnl >= 0 ? 'positive' : 'negative';
     }
   } catch (err) {
@@ -561,7 +846,7 @@ async function triggerTelegramAlert() {
     const res = await fetch(`/signals/notify/${currentSymbol}`, { method: "POST" });
     const data = await res.json();
     if (res.ok) {
-      alert(`Telegram Alert dispatched (${data.notification.status}):\n${data.notification.preview || 'Sent!'}`);
+      alert(`📲 Telegram Alert dispatched (${data.notification.status}):\n${data.notification.preview || 'Sent!'}`);
     } else {
       alert("Notification failed");
     }
@@ -569,4 +854,3 @@ async function triggerTelegramAlert() {
     alert("Alert error: " + err);
   }
 }
-
