@@ -10,6 +10,7 @@ let allSharesData = [];
 let mainChart = null;
 let candleSeries = null;
 let volumeSeries = null;
+let ma14Series = null;
 let ema9Series = null;
 let ema21Series = null;
 let ema50Series = null;
@@ -42,11 +43,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(fetchMarketStatus, 60000);
 });
 
+// Setup function for test backward compatibility
 function setupSidebarToggles() {
   setupUIHandlers();
 }
 
-// Setup Clock
+// Setup Real-time Header Clock
 function setupClock() {
   const clockEl = document.getElementById("clock-display");
   function tick() {
@@ -148,18 +150,26 @@ function setupUIHandlers() {
     });
   }
 
-  // 6. Resize Observer on chart container
-  const chartContainer = document.getElementById("chart-container");
-  if (chartContainer && window.ResizeObserver) {
-    const ro = new ResizeObserver(() => triggerSmoothResize());
-    ro.observe(chartContainer);
+  // 6. Indicators Button Toggle
+  const btnInd = document.getElementById("btn-indicators-toggle");
+  if (btnInd) {
+    btnInd.addEventListener("click", () => {
+      const rsiPane = document.querySelector(".pane-box.rsi-pane");
+      const macdPane = document.querySelector(".pane-box.macd-pane");
+      if (rsiPane && macdPane) {
+        const areHidden = rsiPane.style.display === "none";
+        rsiPane.style.display = areHidden ? "flex" : "none";
+        macdPane.style.display = areHidden ? "flex" : "none";
+        triggerSmoothResize();
+      }
+    });
   }
 }
 
 function triggerSmoothResize() {
   resizeCharts();
-  setTimeout(resizeCharts, 120);
-  setTimeout(resizeCharts, 260);
+  setTimeout(resizeCharts, 80);
+  setTimeout(resizeCharts, 220);
 }
 
 // Right Tab Switcher
@@ -183,6 +193,9 @@ function initLightweightCharts() {
     return;
   }
 
+  const initialWidth = mainContainer.clientWidth || 800;
+  const initialMainHeight = mainContainer.clientHeight || 320;
+
   const commonOptions = {
     layout: {
       background: { type: "solid", color: "#000000" },
@@ -191,8 +204,8 @@ function initLightweightCharts() {
       fontFamily: '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif'
     },
     grid: {
-      vertLines: { color: "rgba(30, 34, 45, 0.4)", style: LightweightCharts.LineStyle.Solid },
-      horzLines: { color: "rgba(30, 34, 45, 0.4)", style: LightweightCharts.LineStyle.Solid }
+      vertLines: { color: "rgba(30, 34, 45, 0.45)", style: LightweightCharts.LineStyle.Solid },
+      horzLines: { color: "rgba(30, 34, 45, 0.45)", style: LightweightCharts.LineStyle.Solid }
     },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
@@ -209,26 +222,29 @@ function initLightweightCharts() {
         labelBackgroundColor: "#1e222d"
       }
     },
-    rightPriceScale: {
-      borderColor: "#1e222d"
-    },
     timeScale: {
       borderColor: "#1e222d",
       timeVisible: true,
-      secondsVisible: false
+      secondsVisible: false,
+      rightOffset: 6,
+      barSpacing: 8,
+      minBarSpacing: 3
     }
   };
 
   // 1. PANE 1: Main Candlestick Chart
   mainChart = LightweightCharts.createChart(mainContainer, {
     ...commonOptions,
+    width: initialWidth,
+    height: initialMainHeight,
     rightPriceScale: {
       borderColor: "#1e222d",
-      scaleMargins: { top: 0.08, bottom: 0.22 }
+      scaleMargins: { top: 0.08, bottom: 0.25 },
+      autoScale: true
     }
   });
 
-  // StockNow Style Candlesticks (Emerald Green & Crimson Red)
+  // StockNow Emerald Green (#26a69a) & Crimson Red (#ef5350) Candlesticks
   candleSeries = mainChart.addCandlestickSeries({
     upColor: "#26a69a",
     downColor: "#ef5350",
@@ -238,14 +254,30 @@ function initLightweightCharts() {
     wickDownColor: "#ef5350"
   });
 
-  // Volume Histogram overlay at the base
+  // Volume Histogram overlay (completely isolated on dedicated 'volume_overlay' scale)
   volumeSeries = mainChart.addHistogramSeries({
     priceFormat: { type: "volume" },
-    priceScaleId: "", // Overlay mode
-    scaleMargins: { top: 0.82, bottom: 0 }
+    priceScaleId: "volume_overlay"
   });
 
-  // Moving Average Lines (EMA 9, EMA 21, EMA 50)
+  // Scale volume strictly in bottom 20%
+  mainChart.priceScale("volume_overlay").applyOptions({
+    scaleMargins: {
+      top: 0.80,
+      bottom: 0.0
+    }
+  });
+
+  // MA 14 (StockNow Signature Cyan Line)
+  ma14Series = mainChart.addLineSeries({
+    color: "#00bcd4",
+    lineWidth: 1.5,
+    title: "MA 14",
+    priceLineVisible: false,
+    lastValueVisible: false
+  });
+
+  // EMA Lines (9, 21, 50)
   ema9Series = mainChart.addLineSeries({
     color: "#2196f3",
     lineWidth: 1.5,
@@ -272,10 +304,17 @@ function initLightweightCharts() {
 
   // 2. PANE 2: RSI 14 Momentum Chart
   if (rsiContainer) {
+    const rsiH = rsiContainer.clientHeight || 85;
     rsiChart = LightweightCharts.createChart(rsiContainer, {
       ...commonOptions,
+      width: initialWidth,
+      height: rsiH,
       timeScale: { borderColor: "#1e222d", visible: false },
-      rightPriceScale: { borderColor: "#1e222d", scaleMargins: { top: 0.1, bottom: 0.1 } }
+      rightPriceScale: {
+        borderColor: "#1e222d",
+        scaleMargins: { top: 0.1, bottom: 0.1 },
+        autoScale: false
+      }
     });
 
     rsiSeries = rsiChart.addLineSeries({
@@ -288,24 +327,24 @@ function initLightweightCharts() {
     // Reference lines for Overbought (70), Midline (50), Oversold (30)
     rsiSeries.createPriceLine({
       price: 70,
-      color: "rgba(239, 83, 80, 0.6)",
+      color: "rgba(239, 83, 80, 0.7)",
       lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dotted,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
       axisLabelVisible: true,
       title: "70"
     });
     rsiSeries.createPriceLine({
       price: 50,
-      color: "rgba(120, 123, 134, 0.35)",
+      color: "rgba(120, 123, 134, 0.4)",
       lineWidth: 1,
       lineStyle: LightweightCharts.LineStyle.Dotted,
       axisLabelVisible: false
     });
     rsiSeries.createPriceLine({
       price: 30,
-      color: "rgba(38, 166, 154, 0.6)",
+      color: "rgba(38, 166, 154, 0.7)",
       lineWidth: 1,
-      lineStyle: LightweightCharts.LineStyle.Dotted,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
       axisLabelVisible: true,
       title: "30"
     });
@@ -313,10 +352,17 @@ function initLightweightCharts() {
 
   // 3. PANE 3: MACD (12, 26, 9) Oscillator Chart
   if (macdContainer) {
+    const macdH = macdContainer.clientHeight || 85;
     macdChart = LightweightCharts.createChart(macdContainer, {
       ...commonOptions,
+      width: initialWidth,
+      height: macdH,
       timeScale: { borderColor: "#1e222d", visible: true },
-      rightPriceScale: { borderColor: "#1e222d", scaleMargins: { top: 0.1, bottom: 0.1 } }
+      rightPriceScale: {
+        borderColor: "#1e222d",
+        scaleMargins: { top: 0.12, bottom: 0.12 },
+        autoScale: true
+      }
     });
 
     // Histogram Series
@@ -326,7 +372,7 @@ function initLightweightCharts() {
       lastValueVisible: false
     });
 
-    // MACD Line
+    // MACD Line (Blue)
     macdLineSeries = macdChart.addLineSeries({
       color: "#2196f3",
       lineWidth: 1.5,
@@ -334,7 +380,7 @@ function initLightweightCharts() {
       lastValueVisible: true
     });
 
-    // Signal Line
+    // Signal Line (Orange)
     signalLineSeries = macdChart.addLineSeries({
       color: "#ff9800",
       lineWidth: 1.5,
@@ -365,7 +411,29 @@ function initLightweightCharts() {
     fitBtn.addEventListener("click", () => fitAllCharts());
   }
 
-  resizeCharts();
+  // Robust ResizeObserver attached directly to each pane container
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const w = entry.contentRect.width;
+        const h = entry.contentRect.height;
+        if (w > 0 && h > 0) {
+          if (entry.target === mainContainer && mainChart) {
+            mainChart.applyOptions({ width: w, height: h });
+          } else if (entry.target === rsiContainer && rsiChart) {
+            rsiChart.applyOptions({ width: w, height: h });
+          } else if (entry.target === macdContainer && macdChart) {
+            macdChart.applyOptions({ width: w, height: h });
+          }
+        }
+      }
+    });
+    ro.observe(mainContainer);
+    if (rsiContainer) ro.observe(rsiContainer);
+    if (macdContainer) ro.observe(macdContainer);
+  }
+
+  triggerSmoothResize();
 }
 
 function syncTimeScales(charts) {
@@ -376,7 +444,9 @@ function syncTimeScales(charts) {
       isSyncingRange = true;
       validCharts.forEach(targetChart => {
         if (targetChart !== sourceChart) {
-          targetChart.timeScale().setVisibleLogicalRange(range);
+          try {
+            targetChart.timeScale().setVisibleLogicalRange(range);
+          } catch (e) {}
         }
       });
       isSyncingRange = false;
@@ -685,14 +755,27 @@ function renderChart(data, levels = currentLevels) {
   const seenDates = new Set();
   const sorted = [...data].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
-  for (const item of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const item = sorted[i];
     if (!item.date || seenDates.has(item.date) || !item.close || item.close <= 0) continue;
     seenDates.add(item.date);
 
-    const close = item.close;
-    const open = (item.open && item.open > 0) ? item.open : close;
-    const high = (item.high && item.high > 0) ? Math.max(item.high, open, close) : Math.max(open, close);
-    const low = (item.low && item.low > 0) ? Math.min(item.low, open, close) : Math.min(open, close);
+    const close = Number(item.close);
+    const rawOpen = Number(item.open);
+    const open = (rawOpen && rawOpen > 0) ? rawOpen : close;
+    const rawHigh = Number(item.high);
+    const rawLow = Number(item.low);
+    const high = (rawHigh && rawHigh > 0) ? Math.max(rawHigh, open, close) : Math.max(open, close);
+    const low = (rawLow && rawLow > 0) ? Math.min(rawLow, open, close) : Math.min(open, close);
+    const volume = Number(item.volume) || 0;
+
+    // Moving Average 14 calculation
+    let ma14 = null;
+    if (i >= 13) {
+      let sum = 0;
+      for (let k = i - 13; k <= i; k++) sum += Number(sorted[k].close);
+      ma14 = parseFloat((sum / 14).toFixed(2));
+    }
 
     cleanData.push({
       date: item.date,
@@ -700,14 +783,15 @@ function renderChart(data, levels = currentLevels) {
       high,
       low,
       close,
-      volume: item.volume || 0,
-      ema_9: item.ema_9,
-      ema_21: item.ema_21,
-      ema_50: item.ema_50,
-      rsi_14: item.rsi_14,
-      macd_line: item.macd_line,
-      macd_signal: item.macd_signal,
-      macd_histogram: item.macd_histogram
+      volume,
+      ma_14: ma14,
+      ema_9: item.ema_9 > 0 ? Number(item.ema_9) : null,
+      ema_21: item.ema_21 > 0 ? Number(item.ema_21) : null,
+      ema_50: item.ema_50 > 0 ? Number(item.ema_50) : null,
+      rsi_14: item.rsi_14 != null ? Number(item.rsi_14) : null,
+      macd_line: item.macd_line != null ? Number(item.macd_line) : null,
+      macd_signal: item.macd_signal != null ? Number(item.macd_signal) : null,
+      macd_histogram: item.macd_histogram != null ? Number(item.macd_histogram) : null
     });
   }
 
@@ -722,35 +806,41 @@ function renderChart(data, levels = currentLevels) {
     close: d.close
   })));
 
-  // 2. Volume Histogram Overlay
+  // 2. Volume Histogram Overlay (Scales separately from price)
   if (volumeSeries) {
     volumeSeries.setData(cleanData.map(d => ({
       time: d.date,
       value: d.volume,
-      color: d.close >= d.open ? "rgba(38, 166, 154, 0.4)" : "rgba(239, 83, 80, 0.4)"
+      color: d.close >= d.open ? "rgba(38, 166, 154, 0.45)" : "rgba(239, 83, 80, 0.45)"
     })));
   }
 
-  // 3. EMA Line series
+  // 3. MA 14 (StockNow Cyan Line)
+  if (ma14Series) {
+    const ma14Points = cleanData.filter(d => d.ma_14 != null).map(d => ({ time: d.date, value: d.ma_14 }));
+    ma14Series.setData(ma14Points);
+  }
+
+  // 4. EMA Line series
   if (ema9Series) ema9Series.setData(cleanData.filter(d => d.ema_9).map(d => ({ time: d.date, value: d.ema_9 })));
   if (ema21Series) ema21Series.setData(cleanData.filter(d => d.ema_21).map(d => ({ time: d.date, value: d.ema_21 })));
   if (ema50Series) ema50Series.setData(cleanData.filter(d => d.ema_50).map(d => ({ time: d.date, value: d.ema_50 })));
 
-  // 4. RSI Data
-  if (rsiSeries) rsiSeries.setData(cleanData.filter(d => d.rsi_14).map(d => ({ time: d.date, value: d.rsi_14 })));
+  // 5. RSI Data
+  if (rsiSeries) rsiSeries.setData(cleanData.filter(d => d.rsi_14 != null).map(d => ({ time: d.date, value: d.rsi_14 })));
 
-  // 5. MACD Data (Line, Signal, Histogram)
+  // 6. MACD Data (Line, Signal, Histogram)
   if (macdLineSeries) macdLineSeries.setData(cleanData.filter(d => d.macd_line != null).map(d => ({ time: d.date, value: d.macd_line })));
   if (signalLineSeries) signalLineSeries.setData(cleanData.filter(d => d.macd_signal != null).map(d => ({ time: d.date, value: d.macd_signal })));
   if (macdHistSeries) {
     macdHistSeries.setData(cleanData.filter(d => d.macd_histogram != null).map(d => ({
       time: d.date,
       value: d.macd_histogram,
-      color: d.macd_histogram >= 0 ? "rgba(38, 166, 154, 0.8)" : "rgba(239, 83, 80, 0.8)"
+      color: d.macd_histogram >= 0 ? "rgba(38, 166, 154, 0.85)" : "rgba(239, 83, 80, 0.85)"
     })));
   }
 
-  // 6. Native S&R Price Lines with Axis Badges
+  // 7. Native S&R Price Lines with Axis Badges
   activePriceLines.forEach(l => {
     try { candleSeries.removePriceLine(l); } catch (e) {}
   });
@@ -795,17 +885,17 @@ function renderChart(data, levels = currentLevels) {
 
 function resizeCharts() {
   const p1 = document.getElementById("priceChart");
-  if (mainChart && p1) {
+  if (mainChart && p1 && p1.clientHeight > 0) {
     mainChart.applyOptions({ width: p1.clientWidth, height: p1.clientHeight });
   }
 
   const p2 = document.getElementById("tv-rsi-chart");
-  if (rsiChart && p2) {
+  if (rsiChart && p2 && p2.clientHeight > 0) {
     rsiChart.applyOptions({ width: p2.clientWidth, height: p2.clientHeight });
   }
 
   const p3 = document.getElementById("tv-macd-chart");
-  if (macdChart && p3) {
+  if (macdChart && p3 && p3.clientHeight > 0) {
     macdChart.applyOptions({ width: p3.clientWidth, height: p3.clientHeight });
   }
 }
