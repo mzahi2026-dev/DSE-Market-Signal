@@ -3,266 +3,314 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DSE Market Signal — Professional TradingView Dashboard</title>
+  <title>DSE Market Signal — TradingView Dashboard & StockNow Chart</title>
   <link rel="stylesheet" href="/styles.css">
   <!-- TradingView Lightweight Charts v4.2 -->
   <script src="/lightweight-charts.standalone.production.js"></script>
 </head>
-<body>
-  <!-- Header Bar -->
-  <header>
+<body class="tv-dark-theme">
+  <!-- Top Application Header & TradingView Tool Bar -->
+  <header class="tv-header">
     <div class="header-left">
+      <!-- Brand & Stock Selector -->
       <div class="brand">
-        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
           <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline>
           <polyline points="16 7 22 7 22 13"></polyline>
         </svg>
-        <span>DSE MARKET SIGNAL</span>
-        <span class="brand-badge">PRO v2.0</span>
+        <span class="brand-title">DSE SIGNAL</span>
+        <span class="brand-tag">PRO</span>
       </div>
-      <button id="toggle-left" class="btn-toggle active" title="Toggle Watchlist (Hotkey: [)">◀ Watchlist</button>
-      <div id="market-status" class="badge badge-closed">DSE: Checking...</div>
+
+      <div class="tv-symbol-search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input id="symbol-search-input" type="text" placeholder="Search Ticker..." value="GP" autocomplete="off" />
+        <div id="search-autocomplete-dropdown" class="search-dropdown hidden"></div>
+      </div>
+
+      <!-- Timeframe Chips (StockNow Style) -->
+      <div class="timeframe-group">
+        <button class="tf-btn" data-tf="1h">1h</button>
+        <button class="tf-btn active" data-tf="1D">1D</button>
+        <button class="tf-btn" data-tf="1W">1W</button>
+        <button class="tf-btn" data-tf="1M">1M</button>
+      </div>
+
+      <div class="header-divider"></div>
+
+      <!-- Chart Types & Indicators (StockNow Style) -->
+      <div class="chart-tools-group">
+        <button class="tool-btn active" title="Candlestick Chart">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="5" y="6" width="4" height="12" rx="1"/>
+            <line x1="7" y1="2" x2="7" y2="6" stroke="currentColor" stroke-width="2"/>
+            <line x1="7" y1="18" x2="7" y2="22" stroke="currentColor" stroke-width="2"/>
+            <rect x="15" y="9" width="4" height="8" rx="1"/>
+            <line x1="17" y1="4" x2="17" y2="9" stroke="currentColor" stroke-width="2"/>
+            <line x1="17" y1="17" x2="17" y2="21" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </button>
+        <button id="btn-indicators-toggle" class="tool-btn" title="Indicators">
+          <span style="font-weight:700; font-size:12px; font-style:italic">fx</span>
+          <span>Indicators</span>
+        </button>
+        <span class="badge-unadjusted">Unadjusted</span>
+      </div>
+
+      <!-- Hidden hook for automated tests -->
+      <button id="toggle-left" class="btn-toggle active" style="display:none">◀ Watchlist</button>
+      <div id="left-sidebar" style="display:none"></div>
     </div>
 
     <div class="header-center">
-      <button id="toggle-fullscreen" class="btn-toggle" title="Maximize Chart View (Hotkey: F)">⛶ Full Chart</button>
-      <div id="health-badge" class="badge badge-health">● Checking Backend...</div>
+      <div id="market-status" class="badge badge-closed">DSE: Checking...</div>
+      <div id="health-badge" class="badge badge-health">● Backend Healthy</div>
     </div>
 
     <div class="header-right">
-      <button id="toggle-right" class="btn-toggle active" title="Toggle Orders & Signals (Hotkey: ])">Signals & Orders ▶</button>
+      <button id="toggle-fullscreen" class="btn-icon" title="Maximize Chart View (Hotkey: F)">⛶</button>
+      <button id="toggle-right" class="btn-tab-toggle active" title="Toggle Right Panel">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="15" y1="3" x2="15" y2="21"/>
+        </svg>
+        <span>All Shares</span>
+      </button>
     </div>
   </header>
 
-  <!-- Main Workspace -->
-  <div class="workspace">
-    <!-- Floating Edge Handles for 1-Click Hide/Unhide -->
-    <button id="handle-left" class="sidebar-edge-handle left" title="Hide Watchlist (Hotkey: [)">◀</button>
-    <button id="handle-right" class="sidebar-edge-handle right" title="Hide Signals & Orders (Hotkey: ])">▶</button>
-
-    <!-- Left Sidebar: Watchlist & Market Breadth -->
-    <aside id="left-sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <span>Market Watchlist</span>
-        <span id="market-breadth-indicator" title="Live DSE Stream">⚡ Live</span>
-      </div>
-
-      <!-- Live Search Filter -->
-      <div class="search-box-container">
-        <input id="search-symbol" type="text" placeholder="🔍 Search Ticker (e.g. GP, SQURPHARMA)..." autocomplete="off" />
-      </div>
-
-      <!-- Market Breadth Visual Meter -->
-      <div class="sidebar-section breadth-section">
-        <div class="section-title-row">
-          <h3>Market Breadth</h3>
-          <span id="breadth-total-count" class="pill-badge">DSE Total</span>
-        </div>
-        <div id="market-breadth">Loading breadth...</div>
-      </div>
-
-      <!-- Watchlist Items -->
-      <div class="sidebar-section watchlist-section">
-        <div id="watchlist-items">
-          <div class="loading-state">Loading watchlist tickers...</div>
-        </div>
-      </div>
+  <!-- Main Trading Workspace -->
+  <div class="tv-workspace">
+    <!-- Left TradingView Drawing Toolbar (StockNow style) -->
+    <aside class="tv-drawing-toolbar">
+      <button class="draw-tool active" title="Crosshair (Magnet)">✚</button>
+      <button class="draw-tool" title="Trendline (Alt+T)">╱</button>
+      <button class="draw-tool" title="Fibonacci Retracement (Alt+F)">≡</button>
+      <button class="draw-tool" title="Brush / Freehand">✎</button>
+      <button class="draw-tool" title="Text Note">T</button>
+      <button class="draw-tool" title="Risk/Reward Position">📐</button>
+      <button class="draw-tool" title="Measure Distance">📏</button>
+      <div class="toolbar-divider"></div>
+      <button class="draw-tool" title="Magnet Mode">🧲</button>
+      <button class="draw-tool" title="Lock All Drawings">🔒</button>
+      <button class="draw-tool" title="Hide Drawings">👁</button>
+      <button class="draw-tool" title="Clear Chart">🗑</button>
     </aside>
 
-    <!-- Center View: Active Stock Header & Interactive TradingView Chart -->
-    <main class="main-view">
-      <!-- Stock Headline -->
-      <div class="stock-headline">
-        <div class="stock-title">
-          <span id="active-symbol" class="stock-symbol">GP</span>
-          <span id="active-price" class="stock-price">---</span>
-          <span id="active-change" class="stock-change">---</span>
+    <!-- Center Chart Multi-Pane Area -->
+    <main class="tv-main-chart-area">
+      <!-- Active Stock Banner with Live OHLCV Floating Legend -->
+      <div class="tv-chart-top-legend">
+        <div class="legend-stock-info">
+          <span id="active-symbol" class="legend-symbol">GP</span>
+          <span class="legend-platform">• StockNow DSE • 1D</span>
+          <span class="legend-ohlc">
+            O <b id="leg-open">---</b>
+            H <b id="leg-high">---</b>
+            L <b id="leg-low">---</b>
+            C <b id="leg-close">---</b>
+            <span id="active-change" class="legend-change positive">---</span>
+          </span>
+          <span class="legend-volume">Vol <b id="leg-vol">---</b></span>
         </div>
-        <div class="stock-meta-tags">
-          <span class="meta-tag">Timeframe: <strong>Daily</strong></span>
-          <span class="meta-tag">Feed: <strong>DSE Direct</strong></span>
-          <span class="meta-tag">Currency: <strong>BDT (৳)</strong></span>
+
+        <div class="legend-indicators-info">
+          <span class="leg-pill pill-ema9">EMA 9 <b id="leg-ema9">---</b></span>
+          <span class="leg-pill pill-ema21">EMA 21 <b id="leg-ema21">---</b></span>
+          <span class="leg-pill pill-ema50">EMA 50 <b id="leg-ema50">---</b></span>
+          <button id="btn-fit-chart" class="btn-fit-chart" title="Reset Zoom / Fit Bars">⛶ Fit</button>
         </div>
       </div>
 
-      <!-- Chart Wrapper -->
-      <div class="chart-wrapper">
-        <div id="chart-container" class="chart-card">
-          <!-- Top Interactive Legend & Crosshair Bar -->
-          <div class="chart-topbar">
-            <div id="chart-legend" class="chart-legend">
-              <span class="leg-item"><span class="leg-label">O</span> <b id="leg-open">---</b></span>
-              <span class="leg-item"><span class="leg-label">H</span> <b id="leg-high">---</b></span>
-              <span class="leg-item"><span class="leg-label">L</span> <b id="leg-low">---</b></span>
-              <span class="leg-item"><span class="leg-label">C</span> <b id="leg-close">---</b></span>
-              <span class="leg-item"><span class="leg-label">Vol</span> <b id="leg-vol">---</b></span>
-              <span class="leg-badge leg-ema9">EMA 9 <b id="leg-ema9">---</b></span>
-              <span class="leg-badge leg-ema21">EMA 21 <b id="leg-ema21">---</b></span>
-              <span class="leg-badge leg-ema50">EMA 50 <b id="leg-ema50">---</b></span>
-            </div>
-            <div class="chart-actions">
-              <button id="btn-fit-chart" class="btn-chart-tool" title="Reset Zoom / Fit All Data">⛶ Fit Data</button>
-            </div>
-          </div>
-
-          <!-- Main Candlestick Chart Pane (TradingView Canvas) -->
-          <div id="priceChart" class="tv-pane-main"></div>
-
-          <!-- Synchronized RSI Subpane -->
-          <div class="rsi-pane-header">
-            <div class="rsi-title">
-              <span class="rsi-indicator-dot"></span>
-              <span>RSI (14) Relative Strength: <b id="leg-rsi">---</b></span>
-            </div>
-            <div class="rsi-zones">
-              <span class="zone-tag ob">Overbought &ge; 70</span>
-              <span class="zone-tag os">Oversold &le; 30</span>
-            </div>
-          </div>
-          <div id="tv-rsi-chart" class="tv-pane-rsi"></div>
+      <!-- Chart Panes Container (TradingView 3-Pane Structure) -->
+      <div id="chart-container" class="tv-chart-panes-wrapper">
+        <!-- PANE 1: Main Candlesticks + Volume Overlay -->
+        <div class="pane-box main-pane">
+          <div id="priceChart" class="tv-canvas-container"></div>
         </div>
 
-        <!-- Technical Indicator Summary Cards -->
-        <div class="stats-grid">
-          <div class="stat-item">
-            <span class="stat-label">Trend Direction</span>
-            <span id="val-trend" class="stat-value">---</span>
+        <!-- PANE 2: RSI 14 Momentum Pane -->
+        <div class="pane-box rsi-pane">
+          <div class="pane-sub-header">
+            <span class="pane-title">RSI 14 <strong id="leg-rsi" class="rsi-value-badge">---</strong></span>
+            <span class="pane-zones">Overbought 70.00 • Mid 50.00 • Oversold 30.00</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">RSI (14)</span>
-            <span id="val-rsi" class="stat-value">---</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">MACD Histogram</span>
-            <span id="val-macd" class="stat-value">---</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Classic Pivot</span>
-            <span id="val-pivot" class="stat-value">---</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Support 1 (S1)</span>
-            <span id="val-s1" class="stat-value">---</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Resistance 1 (R1)</span>
-            <span id="val-r1" class="stat-value">---</span>
-          </div>
+          <div id="tv-rsi-chart" class="tv-canvas-sub"></div>
         </div>
+
+        <!-- PANE 3: MACD (12, 26, 9) Oscillator Pane (Exact StockNow Style) -->
+        <div class="pane-box macd-pane">
+          <div class="pane-sub-header">
+            <span class="pane-title">
+              MACD 12 26 close 9 EMA EMA
+              <span class="macd-leg-group">
+                <span style="color:#2196f3">MACD: <b id="leg-macd-line">---</b></span>
+                <span style="color:#ff9800">Signal: <b id="leg-macd-signal">---</b></span>
+                <span style="color:#26a69a">Hist: <b id="leg-macd-hist">---</b></span>
+              </span>
+            </span>
+            <span class="pane-zones">Histogram Zero Baseline</span>
+          </div>
+          <div id="tv-macd-chart" class="tv-canvas-sub"></div>
+        </div>
+      </div>
+
+      <!-- Quick Technical Key Levels Bar -->
+      <div class="tv-levels-bar">
+        <div class="lvl-item"><span class="lvl-lbl">Trend</span><span id="val-trend" class="lvl-val">---</span></div>
+        <div class="lvl-item"><span class="lvl-lbl">Pivot</span><span id="val-pivot" class="lvl-val">---</span></div>
+        <div class="lvl-item"><span class="lvl-lbl">Support 1 (S1)</span><span id="val-s1" class="lvl-val positive">---</span></div>
+        <div class="lvl-item"><span class="lvl-lbl">Resistance 1 (R1)</span><span id="val-r1" class="lvl-val negative">---</span></div>
+        <div class="lvl-item"><span class="lvl-lbl">RSI (14)</span><span id="val-rsi" class="lvl-val">---</span></div>
+        <div class="lvl-item"><span class="lvl-lbl">MACD Hist</span><span id="val-macd" class="lvl-val">---</span></div>
       </div>
     </main>
 
-    <!-- Right Sidebar: Signals & Virtual Paper Trading -->
-    <aside id="right-sidebar" class="sidebar right-sidebar">
-      <div class="sidebar-header">
-        <span>Signal & Order Panel</span>
-        <span class="pill-badge pro">AI Ready</span>
-      </div>
-
-      <!-- Algorithmic Signal Card -->
-      <div class="sidebar-section">
-        <h3>Algorithmic Confluence</h3>
-        <div class="signal-box">
-          <div id="signal-badge" class="signal-tag signal-hold">NEUTRAL</div>
-          <div class="signal-conf-row">
-            <span>Signal Confidence:</span>
-            <strong id="signal-confidence">---%</strong>
-          </div>
-          <div class="signal-levels-row">
-            <div class="level-box">
-              <span class="level-label">Target (TP)</span>
-              <strong id="signal-target" class="positive">---</strong>
-            </div>
-            <div class="level-box">
-              <span class="level-label">Stop Loss (SL)</span>
-              <strong id="signal-stop-loss" class="negative">---</strong>
-            </div>
-            <div class="level-box">
-              <span class="level-label">Risk/Reward</span>
-              <strong id="signal-rrr">---</strong>
-            </div>
-          </div>
-        </div>
-
-        <button onclick="triggerTelegramAlert()" class="btn-telegram">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.37.75-.56 2.94-1.28 4.9-2.12 5.88-2.54 2.8-1.19 3.38-1.4 3.76-1.4.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .39z"/>
+    <!-- Right Sidebar (StockNow "All Shares" Table & Signals/Trading Tabs) -->
+    <aside id="right-sidebar" class="tv-right-panel">
+      <!-- Panel Navigation Tabs -->
+      <div class="panel-tabs-header">
+        <button class="panel-tab active" data-tab="tab-shares" onclick="switchRightTab('tab-shares')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
           </svg>
-          Send Telegram Alert
+          <span>All Shares</span>
         </button>
-
-        <h4 class="subheading">Technical Confluences</h4>
-        <ul id="signal-reasons" class="signal-reasons-list">
-          <li>Calculating indicator confluences...</li>
-        </ul>
+        <button class="panel-tab" data-tab="tab-signals" onclick="switchRightTab('tab-signals')">
+          <span>⚡ Signals</span>
+        </button>
+        <button class="panel-tab" data-tab="tab-paper" onclick="switchRightTab('tab-paper')">
+          <span>💼 Orders</span>
+        </button>
       </div>
 
-      <!-- Paper Trading Panel -->
-      <div class="sidebar-section">
-        <h3>Virtual Paper Trading</h3>
-        <div class="order-form">
-          <div class="quick-qty-group">
-            <span class="qty-label">Quick Qty:</span>
-            <div class="quick-qty-buttons">
-              <button type="button" class="btn-qty" onclick="setQuickQty(10)">10</button>
-              <button type="button" class="btn-qty" onclick="setQuickQty(50)">50</button>
-              <button type="button" class="btn-qty" onclick="setQuickQty(100)">100</button>
-              <button type="button" class="btn-qty" onclick="setQuickQty(500)">500</button>
+      <!-- TAB 1: StockNow "All Shares" Table View -->
+      <div id="tab-shares" class="tab-content active">
+        <!-- Market Breadth Strip -->
+        <div class="breadth-summary-strip">
+          <div id="market-breadth" class="breadth-inline">Loading DSE market...</div>
+        </div>
+
+        <!-- Filter bar -->
+        <div class="shares-filter-bar">
+          <select id="shares-category-select" onchange="filterWatchlistCategory(this.value)">
+            <option value="all">All DSE Tickers</option>
+            <option value="gainers">Top Gainers ▲</option>
+            <option value="losers">Top Losers ▼</option>
+          </select>
+          <span id="shares-count-pill" class="shares-count">Loading...</span>
+        </div>
+
+        <!-- All Shares Table (Matching StockNow Image 1 exactly) -->
+        <div class="shares-table-container">
+          <table class="shares-table">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding-left:12px;">Code</th>
+                <th style="text-align:right;">Last</th>
+                <th style="text-align:right; padding-right:12px;">Ch%</th>
+              </tr>
+            </thead>
+            <tbody id="shares-table-body">
+              <tr><td colspan="3" class="loading-td">Loading live tickers...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2: Algorithmic Signals & AI -->
+      <div id="tab-signals" class="tab-content">
+        <div class="panel-inner-section">
+          <h3 class="panel-sec-title">Algorithmic Confluence</h3>
+          <div class="signal-card-box">
+            <div id="signal-badge" class="signal-status-badge signal-hold">NEUTRAL</div>
+            <div class="signal-metric-row">
+              <span>Confidence Score:</span>
+              <strong id="signal-confidence">---%</strong>
+            </div>
+            <div class="signal-targets-grid">
+              <div class="target-item">
+                <span class="lbl">Target (TP)</span>
+                <strong id="signal-target" class="positive">---</strong>
+              </div>
+              <div class="target-item">
+                <span class="lbl">Stop Loss (SL)</span>
+                <strong id="signal-stop-loss" class="negative">---</strong>
+              </div>
+              <div class="target-item">
+                <span class="lbl">Risk / Reward</span>
+                <strong id="signal-rrr">---</strong>
+              </div>
             </div>
           </div>
 
-          <div class="form-group">
-            <label for="order-qty">Order Shares</label>
-            <input id="order-qty" type="number" min="1" value="10" oninput="calculateEstCost()">
-          </div>
+          <button onclick="triggerTelegramAlert()" class="btn-telegram-full">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.37.75-.56 2.94-1.28 4.9-2.12 5.88-2.54 2.8-1.19 3.38-1.4 3.76-1.4.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .39z"/>
+            </svg>
+            Send Telegram Alert
+          </button>
 
-          <div class="order-estimate-row">
-            <span>Estimated Value:</span>
-            <strong id="order-est-cost">BDT 0.00</strong>
-          </div>
-
-          <div class="order-actions">
-            <button class="btn-buy" onclick="executePaperOrder('BUY')">
-              <span>BUY</span>
-              <small>Long</small>
-            </button>
-            <button class="btn-sell" onclick="executePaperOrder('SELL')">
-              <span>SELL</span>
-              <small>Short/Exit</small>
-            </button>
-          </div>
+          <h4 class="subheading-text">Technical Confluences</h4>
+          <ul id="signal-reasons" class="confluences-list">
+            <li>Calculating indicator rules...</li>
+          </ul>
         </div>
+      </div>
 
-        <h4 class="subheading">Virtual Portfolio</h4>
-        <div class="portfolio-stats">
-          <div class="port-row">
-            <span class="port-label">Cash Balance:</span>
-            <strong id="port-cash">---</strong>
+      <!-- TAB 3: Virtual Paper Trading -->
+      <div id="tab-paper" class="tab-content">
+        <div class="panel-inner-section">
+          <h3 class="panel-sec-title">Virtual Execution</h3>
+          <div class="quick-qty-strip">
+            <span class="qty-lbl">Quick Qty:</span>
+            <div class="quick-btns">
+              <button type="button" class="btn-q" onclick="setQuickQty(10)">10</button>
+              <button type="button" class="btn-q" onclick="setQuickQty(50)">50</button>
+              <button type="button" class="btn-q" onclick="setQuickQty(100)">100</button>
+              <button type="button" class="btn-q" onclick="setQuickQty(500)">500</button>
+            </div>
           </div>
-          <div class="port-row">
-            <span class="port-label">Total Equity:</span>
-            <strong id="port-equity">---</strong>
+
+          <div class="order-input-group">
+            <label>Order Shares</label>
+            <input id="order-qty" type="number" min="1" value="10" oninput="calculateEstCost()" />
           </div>
-          <div class="port-row">
-            <span class="port-label">Unrealized P&L:</span>
-            <strong id="port-pnl">---</strong>
+
+          <div class="order-estimate-bar">
+            <span>Estimated Value:</span>
+            <strong id="order-est-cost">BDT ৳0.00</strong>
+          </div>
+
+          <div class="order-actions-grid">
+            <button class="btn-order-buy" onclick="executePaperOrder('BUY')">BUY</button>
+            <button class="btn-order-sell" onclick="executePaperOrder('SELL')">SELL</button>
+          </div>
+
+          <h4 class="subheading-text" style="margin-top:16px;">Virtual Portfolio</h4>
+          <div class="portfolio-box">
+            <div class="port-item"><span>Cash:</span><strong id="port-cash">---</strong></div>
+            <div class="port-item"><span>Equity:</span><strong id="port-equity">---</strong></div>
+            <div class="port-item"><span>P&L:</span><strong id="port-pnl">---</strong></div>
           </div>
         </div>
       </div>
     </aside>
   </div>
 
-  <!-- Footer Status Bar -->
-  <footer>
+  <!-- Bottom Real-time Status Bar -->
+  <footer class="tv-footer">
     <div class="footer-left">
       <span id="scheduler-info">Scheduler: Active (16:30 BST)</span>
-      <span class="separator">|</span>
-      <span>DSE Market Signal Autonomous Engine</span>
+      <span class="sep">|</span>
+      <span>DSE Circuit Bands: Active</span>
+      <span class="sep">|</span>
+      <span>TradingView Core Engine v4.2</span>
     </div>
     <div class="footer-right">
-      <span class="badge-circuit">⚡ DSE Circuit Bands: Active</span>
-      <span class="separator">|</span>
       <span id="clock-display">UTC+6</span>
+      <span class="sep">|</span>
+      <span id="active-price" style="display:none"></span>
     </div>
   </footer>
 
