@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: dse-market-signal
+    env: docker
+    dockerfilePath: Dockerfile
+    region: singapore # Closest datacenter to Bangladesh for lowest latency
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: TZ
+        value: Asia/Dhaka
+      - key: LOG_LEVEL
+        value: INFO
