@@ -1,0 +1,57 @@
+{
+  "engine_version": "2.0.0",
+  "last_startup_catchup": {
+    "timestamp": "2026-11-01T03:51:57.154440+06:00",
+    "symbols_checked": [
+      "GP",
+      "BATBC",
+      "SQURPHARMA",
+      "BEXIMCO",
+      "ROBI"
+    ],
+    "gaps_detected": {
+      "GP": {
+        "status": "up_to_date",
+        "latest_date": "2026-11-01",
+        "missing_days": 0
+      },
+      "BATBC": {
+        "status": "up_to_date",
+        "latest_date": "2026-11-01",
+        "missing_days": 0
+      },
+      "SQURPHARMA": {
+        "status": "up_to_date",
+        "latest_date": "2026-11-01",
+        "missing_days": 0
+      },
+      "BEXIMCO": {
+        "status": "up_to_date",
+        "latest_date": "2026-11-01",
+        "missing_days": 0
+      },
+      "ROBI": {
+        "status": "up_to_date",
+        "latest_date": "2026-11-01",
+        "missing_days": 0
+      }
+    },
+    "recovered_batches": 0,
+    "total_records_inserted": 0,
+    "status": "success",
+    "intraday_triggered": false
+  },
+  "last_hourly_run": {
+    "timestamp": "2026-11-01T03:51:50.512204+06:00",
+    "status": "success",
+    "updated_symbols": 5
+  },
+  "last_eod_run": {
+    "timestamp": "2026-11-01T03:51:54.126660+06:00",
+    "status": "success",
+    "total_inserted": 0
+  },
+  "total_gap_recovered_records": 0,
+  "last_gap_audit": {},
+  "status": "ready"
+}

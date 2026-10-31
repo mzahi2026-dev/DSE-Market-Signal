@@ -65,6 +65,12 @@ from engine.skills.registry import skills_registry
 from engine.pipeline import run_stock_pipeline
 from scripts.gap_audit import audit
 from scripts.recovery import run_recovery
+from backend.data_collection import (
+    collect_hourly_intraday,
+    collect_daily_eod,
+    run_gap_filling_catchup,
+    get_collection_engine_status
+)
 
 logger = logging.getLogger("dse.app")
 
@@ -77,23 +83,17 @@ async def lifespan(app: FastAPI):
     with connect():
         pass
 
-    # Restart recovery audit: check for missing historical data
+    # Autonomous offline gap filling on startup (catch-up engine)
     try:
-        gap_report = audit("GP")
-        if gap_report.get("missing_trading_days"):
-            logger.warning(
-                "FastAPI startup: detected %d missing trading days for GP",
-                len(gap_report["missing_trading_days"])
-            )
-        else:
-            logger.info("FastAPI startup: all historical trading sessions verified")
+        logger.info("⚡ [Startup] Executing autonomous offline gap-filling catch-up...")
+        run_gap_filling_catchup()
     except Exception as exc:
-        logger.error("FastAPI startup recovery audit error: %s", exc)
+        logger.error("FastAPI startup gap-filling error: %s", exc)
 
-    # Schedule daily collection at 16:30 Asia/Dhaka for all configured symbols
+    # Schedule daily EOD collection at 16:30 Asia/Dhaka for all configured symbols
     # Prevent duplicate runs with max_instances=1, coalesce=True, replace_existing=True
     scheduler.add_job(
-        collect_daily,
+        collect_daily_eod,
         "cron",
         hour=16,
         minute=30,
@@ -107,7 +107,7 @@ async def lifespan(app: FastAPI):
 
     # Schedule hourly intraday collection during active DSE market hours (Sun-Thu 10:00 - 14:00 Asia/Dhaka)
     scheduler.add_job(
-        collect_intraday,
+        collect_hourly_intraday,
         "cron",
         day_of_week="sun,mon,tue,wed,thu",
         hour="10-14",
@@ -702,6 +702,31 @@ def backtest_run(
     if res.get("status") == "insufficient_data":
         raise HTTPException(400, res.get("message"))
     return res
+
+
+# Autonomous Data Collection Engine Endpoints
+@app.get("/collection/status")
+def collection_status():
+    """Return comprehensive diagnostics of the data collection & catch-up engine."""
+    return get_collection_engine_status()
+
+
+@app.post("/collection/run-gap-fill")
+def collection_trigger_gap_fill(symbols: Optional[List[str]] = None):
+    """Manually trigger offline gap-filling catch-up across symbols."""
+    return run_gap_filling_catchup(symbols=symbols)
+
+
+@app.post("/collection/run-hourly")
+def collection_trigger_hourly(symbols: Optional[List[str]] = None):
+    """Manually trigger hourly intraday collection."""
+    return collect_hourly_intraday(symbols=symbols)
+
+
+@app.post("/collection/run-eod")
+def collection_trigger_eod(symbols: Optional[List[str]] = None):
+    """Manually trigger daily EOD collection."""
+    return collect_daily_eod(symbols=symbols)
 
 
 # Phase 9 - Frontend Static Mount
