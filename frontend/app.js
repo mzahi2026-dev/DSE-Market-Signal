@@ -755,6 +755,9 @@ async function loadStockData(symbol) {
       updateSignalCard(sig);
     }
 
+    // Fetch live Google Gemini AI opinion asynchronously
+    fetchAIReview(symbol);
+
     if (indRes.ok) {
       const ind = await indRes.json();
       chartData = ind.data || [];
@@ -833,6 +836,35 @@ function updateSignalCard(sig) {
 
   if (reasonsEl && sig.reasons) {
     reasonsEl.innerHTML = sig.reasons.map(r => `<li>${r}</li>`).join("");
+  }
+}
+
+async function fetchAIReview(symbol) {
+  const verdictEl = document.getElementById("ai-verdict-text");
+  const confEl = document.getElementById("ai-conf-text");
+  const summaryEl = document.getElementById("ai-summary-text");
+  const badgeEl = document.getElementById("ai-consensus-badge");
+
+  if (!summaryEl) return;
+  summaryEl.innerText = "Querying Google Gemini AI...";
+
+  try {
+    const res = await fetch(`/ai/review-signal/${symbol}`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (verdictEl) {
+      verdictEl.innerText = data.ai_verdict;
+      verdictEl.style.color = data.ai_verdict.includes("BUY") ? "#26a69a" : (data.ai_verdict.includes("SELL") ? "#ef5350" : "#ff9800");
+    }
+    if (confEl) confEl.innerText = `${data.ai_confidence}%`;
+    if (summaryEl) summaryEl.innerText = data.ai_summary || "Gemini technical review completed.";
+    if (badgeEl) {
+      badgeEl.innerText = data.consensus || "ALIGNED";
+      badgeEl.style.color = data.consensus === "ALIGNED" ? "#26a69a" : "#ff9800";
+    }
+  } catch (err) {
+    if (summaryEl) summaryEl.innerText = "AI second opinion unavailable.";
   }
 }
 

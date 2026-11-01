@@ -22,7 +22,7 @@ CONFIG_PATH = Path(__file__).resolve().parent / "ai_config.json"
 def get_ai_config() -> Dict[str, Any]:
     config = {
         "api_key": os.getenv("GEMINI_API_KEY", ""),
-        "model": "gemini-1.5-flash",
+        "model": "gemini-2.5-flash",
         "temperature": 0.2
     }
     if CONFIG_PATH.exists():
@@ -102,26 +102,43 @@ def analyze_stock_with_ai(symbol: str) -> Dict[str, Any]:
     if not api_key:
         return generate_fallback_stock_analysis(symbol, analysis, signal)
 
-    # Attempt live Gemini API call
+    # Attempt live Gemini REST API call (native urllib, zero external dependency)
     try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
+        import urllib.request
+        model_name = config.get("model", "gemini-2.5-flash")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         prompt = (
-            f"Act as a professional Dhaka Stock Exchange financial analyst. Analyze {symbol}.\n"
-            f"Price: {analysis['price']['close']}, Trend: {analysis['trend']}, RSI: {analysis['indicators']['rsi_14']}\n"
-            f"Signal: {signal['signal']}, Reasons: {signal['reasons']}\n"
-            f"Provide concise JSON output with keys: verdict, confidence, summary, key_catalysts, risks."
+            f"Act as a professional Dhaka Stock Exchange financial analyst and technical analyst. Analyze {symbol}.\n"
+            f"Price: BDT {analysis['price']['close']}, Trend: {analysis['trend']}, RSI: {analysis['indicators']['rsi_14']:.1f}\n"
+            f"Algorithmic Signal: {signal['signal']}, Reasons: {signal['reasons']}\n"
+            f"Provide a JSON response with: 'verdict' (BUY/SELL/HOLD), 'confidence' (percentage integer), 'summary' (2 concise sentences), 'key_catalysts' (list of strings), 'risks' (list of strings)."
         )
-        response = client.models.generate_content(
-            model=config.get("model", "gemini-1.5-flash"),
-            contents=prompt
-        )
+        req_body = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=req_body, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            candidate = data.get("candidates", [{}])[0]
+            text = candidate.get("content", {}).get("parts", [{}])[0].get("text", "")
+            parsed = json.loads(text) if text else {}
+
         return {
             "symbol": symbol,
             "mode": "gemini_live",
-            "model": config.get("model", "gemini-1.5-flash"),
-            "raw_analysis": response.text,
-            "signal": signal["signal"]
+            "model": model_name,
+            "verdict": parsed.get("verdict", signal["signal"]),
+            "confidence": parsed.get("confidence", signal["confidence"]),
+            "summary": parsed.get("summary", ""),
+            "key_catalysts": parsed.get("key_catalysts", []),
+            "risks": parsed.get("risks", []),
+            "action_plan": {
+                "entry_range": f"BDT {analysis['price']['close'] * 0.99:.1f} - {analysis['price']['close'] * 1.01:.1f}",
+                "primary_target": f"BDT {signal['target']:.1f}",
+                "stop_loss": f"BDT {signal['stop_loss']:.1f}",
+                "risk_reward": f"1:{signal['risk_reward_ratio']}"
+            }
         }
     except Exception as exc:
         logger.warning("Gemini AI live call failed (%s); reverting to fallback", exc)
