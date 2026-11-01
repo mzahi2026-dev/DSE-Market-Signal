@@ -87,6 +87,7 @@ def get_market_summary() -> Dict[str, Any]:
         "advance_decline_ratio": adv_dec_ratio,
         "total_volume": round(total_volume, 2),
         "sentiment": sentiment,
+        "all_stocks": sorted(stocks_data, key=lambda x: x["change_pct"], reverse=True),
         "top_gainers": gainers,
         "top_losers": losers,
         "most_active": most_active

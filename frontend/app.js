@@ -608,7 +608,10 @@ async function fetchMarketSummary() {
       `;
     }
 
-    if (data.top_gainers) {
+    if (data.all_stocks && data.all_stocks.length > 0) {
+      allSharesData = data.all_stocks;
+      filterWatchlistCategory("all");
+    } else if (data.top_gainers) {
       allSharesData = data.top_gainers;
       filterWatchlistCategory("all");
     }
