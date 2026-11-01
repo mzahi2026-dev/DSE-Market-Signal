@@ -771,7 +771,8 @@ async function loadStockData(symbol) {
 function selectSymbol(sym) {
   loadStockData(sym);
   document.querySelectorAll(".shares-row").forEach(tr => {
-    tr.classList.toggle("active", tr.querySelector(".td-code")?.innerText === sym);
+    const text = tr.querySelector(".td-code")?.innerText?.replace(/[^\w]/g, "") || "";
+    tr.classList.toggle("active", text === sym);
   });
 }
 
@@ -927,6 +928,13 @@ function renderChart(data, levels = currentLevels) {
     try { candleSeries.removePriceLine(l); } catch (e) {}
   });
   activePriceLines = [];
+
+  // Reset price scale to re-calculate clean Y bounds for the new stock
+  if (mainChart) {
+    mainChart.priceScale("right").applyOptions({
+      autoScale: true
+    });
+  }
 
   if (levels) {
     if (levels.resistance_1) {
