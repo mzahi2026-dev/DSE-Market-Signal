@@ -818,6 +818,9 @@ function updateSignalCard(sig) {
   const sl = document.getElementById("signal-stop-loss");
   const rrr = document.getElementById("signal-rrr");
   const reasonsEl = document.getElementById("signal-reasons");
+  const symBadge = document.getElementById("signal-active-symbol-badge");
+
+  if (symBadge) symBadge.innerText = sig.symbol || currentSymbol;
 
   if (badge) {
     badge.innerText = sig.signal;
