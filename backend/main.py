@@ -57,7 +57,9 @@ from backend.screener import (
     screen_stocks,
     get_watchlist,
     add_to_watchlist,
-    remove_from_watchlist
+    remove_from_watchlist,
+    scan_full_dse_market_and_rank,
+    auto_scan_and_sync_watchlist
 )
 from backend.backtesting import run_backtest
 from engine.config import load_engine_config
@@ -681,6 +683,23 @@ def watchlist_add(symbol: str, note: str = ""):
 def watchlist_remove(symbol: str):
     """Remove stock from user watchlist."""
     return remove_from_watchlist(symbol=symbol)
+
+
+@app.get("/screener/live-market")
+def screener_live_market(top_n: int = 15):
+    """Scan all 390+ live traded DSE stocks and rank by volume, turnover, and momentum."""
+    return {
+        "status": "success",
+        "stocks": scan_full_dse_market_and_rank(top_n=top_n)
+    }
+
+
+@app.post("/screener/auto-sync-watchlist")
+def screener_auto_sync(top_n: int = 5, backfill_months: int = 6):
+    """Auto-scan entire DSE market, pick the best momentum breakout stocks,
+    backfill historical data, generate signals, and add directly to watchlist."""
+    return auto_scan_and_sync_watchlist(top_n=top_n, backfill_months=backfill_months)
+
 
 
 # Phase 15 - Backtesting Endpoints

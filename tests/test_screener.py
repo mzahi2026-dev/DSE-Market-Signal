@@ -62,3 +62,9 @@ def test_api_screener_and_watchlist():
         assert del_res.status_code == 200
         assert del_res.json()["status"] == "removed"
 
+        # Screener live-market and auto-sync endpoints
+        lm_res = client.get("/screener/live-market?top_n=3")
+        assert lm_res.status_code == 200
+        assert "stocks" in lm_res.json()
+
+

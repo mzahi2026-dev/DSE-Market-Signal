@@ -1,7 +1,7 @@
 {
   "engine_version": "2.0.0",
   "last_startup_catchup": {
-    "timestamp": "2026-11-01T04:13:28.304881+06:00",
+    "timestamp": "2026-11-01T18:09:58.489155+06:00",
     "symbols_checked": [
       "GP",
       "BATBC",
@@ -47,12 +47,12 @@
     "intraday_triggered": false
   },
   "last_hourly_run": {
-    "timestamp": "2026-11-01T04:13:22.497797+06:00",
+    "timestamp": "2026-11-01T18:09:36.617591+06:00",
     "status": "success",
     "updated_symbols": 5
   },
   "last_eod_run": {
-    "timestamp": "2026-11-01T04:13:22.513591+06:00",
+    "timestamp": "2026-11-01T18:09:36.627564+06:00",
     "status": "success",
     "total_inserted": 1
   },

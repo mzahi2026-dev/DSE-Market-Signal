@@ -176,6 +176,9 @@
           </svg>
           <span>All Shares</span>
         </button>
+        <button class="panel-tab" data-tab="tab-watchlist" onclick="switchRightTab('tab-watchlist')">
+          <span>⭐ Watchlist</span>
+        </button>
         <button class="panel-tab" data-tab="tab-signals" onclick="switchRightTab('tab-signals')">
           <span>⚡ Signals</span>
         </button>
@@ -218,7 +221,35 @@
         </div>
       </div>
 
-      <!-- TAB 2: Algorithmic Signals & AI -->
+      <!-- TAB 2: Smart Watchlist & Full Market Auto-Scanner -->
+      <div id="tab-watchlist" class="tab-content">
+        <div class="watchlist-scanner-header">
+          <div class="scanner-btn-row">
+            <button id="btn-scan-market" class="btn-scan-full" onclick="runAutoMarketScan()" title="Scan entire 390+ DSE market for breakout stocks">
+              ⚡ Scan DSE Market (390+)
+            </button>
+          </div>
+          <p class="scanner-hint">Picks high-volume breakouts & auto-backfills data into watchlist.</p>
+        </div>
+
+        <div class="watchlist-table-container">
+          <table class="shares-table">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding-left:10px;">Stock</th>
+                <th style="text-align:right;">Last</th>
+                <th style="text-align:center;">Signal</th>
+                <th style="text-align:right; padding-right:10px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="watchlist-table-body">
+              <tr><td colspan="4" class="loading-td">Loading watchlist...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 3: Algorithmic Signals & AI -->
       <div id="tab-signals" class="tab-content">
         <div class="panel-inner-section">
           <h3 class="panel-sec-title">Algorithmic Confluence</h3>

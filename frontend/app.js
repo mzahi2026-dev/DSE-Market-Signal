@@ -37,6 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
   fetchMarketSummary();
   loadStockData(currentSymbol);
   fetchPortfolio();
+  fetchWatchlist();
 
   // Polling intervals
   setInterval(fetchSystemHealth, 30000);
@@ -641,6 +642,87 @@ function filterWatchlistCategory(cat) {
       </td>
     </tr>
   `).join("");
+}
+
+// Watchlist & Auto Market Scanner Functions
+async function fetchWatchlist() {
+  const tbody = document.getElementById("watchlist-table-body");
+  if (!tbody) return;
+
+  try {
+    const res = await fetch("/watchlist");
+    if (!res.ok) return;
+    const data = await res.json();
+    const items = data.watchlist || [];
+
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="loading-td">Watchlist empty.<br>Click "⚡ Scan DSE Market" above!</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = items.map(item => `
+      <tr class="shares-row ${item.symbol === currentSymbol ? 'active' : ''}">
+        <td class="td-code" onclick="selectSymbol('${item.symbol}')" style="cursor:pointer;" title="${item.note || ''}">
+          ⭐ ${item.symbol}
+        </td>
+        <td class="td-last" onclick="selectSymbol('${item.symbol}')" style="cursor:pointer;">
+          ৳${(item.price || 0).toFixed(1)}
+        </td>
+        <td style="text-align:center;" onclick="selectSymbol('${item.symbol}')">
+          <span class="signal-tag ${item.signal.includes('BUY') ? 'pos' : (item.signal.includes('SELL') ? 'neg' : 'neu')}">
+            ${item.signal}
+          </span>
+        </td>
+        <td style="text-align:right; padding-right:10px;">
+          <button class="btn-remove-watch" onclick="removeFromWatchlist('${item.symbol}', event)" title="Remove">✕</button>
+        </td>
+      </tr>
+    `).join("");
+  } catch (err) {
+    console.error("Watchlist fetch error:", err);
+  }
+}
+
+async function removeFromWatchlist(symbol, event) {
+  if (event) event.stopPropagation();
+  try {
+    const res = await fetch(`/watchlist/${symbol}`, { method: "DELETE" });
+    if (res.ok) {
+      fetchWatchlist();
+    }
+  } catch (err) {
+    console.error("Remove watchlist error:", err);
+  }
+}
+
+async function runAutoMarketScan() {
+  const btn = document.getElementById("btn-scan-market");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner-inline"></span> Scanning 390+ DSE Stocks...`;
+  }
+
+  try {
+    const res = await fetch("/screener/auto-sync-watchlist?top_n=5&backfill_months=6", {
+      method: "POST"
+    });
+    const result = await res.json();
+    if (result.status === "success") {
+      await fetchWatchlist();
+      await fetchMarketSummary();
+      if (result.watchlist_stocks && result.watchlist_stocks.length > 0) {
+        // Select the top scanned breakout stock
+        selectSymbol(result.watchlist_stocks[0].symbol);
+      }
+    }
+  } catch (err) {
+    console.error("Market scan error:", err);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `⚡ Scan DSE Market (390+)`;
+    }
+  }
 }
 
 // Load Stock Data & Feed to Lightweight Charts
